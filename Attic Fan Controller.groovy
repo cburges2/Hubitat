@@ -12,9 +12,9 @@
 
 metadata {
 	definition (
-			name: "Attic Fan Controller",
-			namespace: "hubitat",
-			author: "Chris B"
+		name: "Attic Fan Controller",
+		namespace: "hubitat",
+		author: "Chris B"
 	) {
         capability "Light"
         capability "Switch"           // makes this a switch device, if needed
@@ -27,14 +27,13 @@ metadata {
 		attribute "hysteresis", "NUMBER"    		// 
 		attribute "atticHumidity", "ENUM"	        // set from app
 		attribute "outsideHumidity", "ENUM"			// set from app
-        attribute "display", "STRING"       	    // attribute for dashboad status tile showing temps, humids, operatitonal state and what venting for. 
+		attribute "display", "STRING"       	    // attribute for dashboad status tile showing temps, humids, operatitonal state and what venting for. 
         attribute "display2", "STRING"				// attribute for dashboad status tile showing fanSpeed, setpoints and offset. 
         attribute "atticTemp", "NUMBER"             // set from app
         attribute "outsideTemp", "NUMBER"           // set from app
         attribute "atticTempSetpoint", "NUMBER"     // fan will not run for temperature difference if attic temp is less than this setpoint (will still run for humidity)
         attribute "atticHumidSetpoint", "ENUM"      // fan will not run for humidity difference if attic humidity is greater than this setpoint (will still run for temp)
         attribute "fanSpeed", "ENUM"   			    // low, medium, high - manually set or auto set fan speed, based on pref setting
-        //attribute "fanMode", "ENUM"               // auto or manual - moved to prefs
         attribute "presence", "ENUM"                // venting for humidity, temp, both, or none
 
 		// Commands needed to change internal attributes of virtual device.
@@ -60,14 +59,13 @@ metadata {
 		input( name: "autoFan", type:"bool", title: "Enable auto fan speed", defaultValue:true)
 		input( name: "fanMediumThreshold", type:"enum", title: "Fan Medium Speed Threshold", defaultValue:"3", options:[1:"1",2:"2",3:"3",4:"4",5:"5"])
 		input( name: "fanHighThreshold", type:"enum", title: "Fan High Speed Threshold", defaultValue:"6", options:[3:"3",4:"4",5:"5",6:"6",7:"7",8:"8",9:"9",10:"10",11:"11",12:"12"])
-	    
 	}
 }
 
 def installed() {
 	log.warn "installed..." 
     device.updateSetting("txtEnable",[type:"bool",value:true])
-
+	
 	setOperatingState("idle")
     setAtticHumidSetpoint(45)
     setAtticHumidity(50)
@@ -98,7 +96,6 @@ def initialize() {
 	if (state?.lastRunningMode == null) {    
 	    sendEvent(name: "Operating State", value: (operatingState ?: "idle"))              
 		state.lastRunningMode = "idle"
-
     }	
 }
 
@@ -165,8 +162,8 @@ def manageCycle() {
 	def presence = device.currentValue("presence")
 	def fanMode = device.currentValue("fanMode")
     
-    // temp and humidity checks
-    def humidTemp = (outsideHumidity <= settings?.maxTempHumidity.toInteger())
+	// temp and humidity checks
+	def humidTemp = (outsideHumidity <= settings?.maxTempHumidity.toInteger())
 	def atticHumidityOn = (atticHumidity > outsideHumidity) && (atticHumidity > atticHumidSetpoint)		  // checks to vent for humidity difference (no offset)
 	def runTemp = (atticHumidity > outsideHumidity) && humidTemp     // checks humidity difference and humidTemp setpoint before venting for temperature difference
 	def tempOn = (atticTemp > outsieTemp) && (atticTemp > atticTempSetpoint)  // checks to vent for temp difference only if attic temp greater than setpoint. 
