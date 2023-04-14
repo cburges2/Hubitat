@@ -19,10 +19,9 @@ metadata {
         capability "Light"
         capability "Switch"           // makes this a switch device, if needed
 		capability "Actuator"
-        capability "Contact Sensor"	  // makes this a contact sensor device, "open", "closed" based on switch state
         capability "Presence Sensor"  // overidden as presence of "humidity", "temperature", "both" or "none"
 
-// ** cpmfigs   **
+		// attributes
 		attribute "operatingState", "ENUM"  		// ["venting", "idle"]
 		attribute "hysteresis", "NUMBER"    		// 
 		attribute "atticHumidity", "ENUM"	        // set from app
@@ -112,7 +111,6 @@ def on() {
     String verb = (device.currentValue("switch") == "on") ? "is" : "was turned"
     eventSend("switch",verb,"on")
     sendEvent(name: "operatingState", value: "venting", descriptionText: getDescriptionText("operatingState set to venting")) 
-    sendEvent(name: "contact", value: "open", isStateChange: forceUpdate)
     runIn(1,setDisplay)
 }
 
@@ -120,7 +118,6 @@ def off() {
     String verb = (device.currentValue("switch") == "off") ? "is" : "was turned"
     eventSend("switch",verb,"off")
     sendEvent(name: "operatingState", value: "idle", descriptionText: getDescriptionText("operatingState set to idle")) 
-    sendEvent(name: "contact", value: "closed", isStateChange: forceUpdate)
     runIn(1,setDisplay)    
 }
 
