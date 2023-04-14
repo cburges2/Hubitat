@@ -11,3 +11,4 @@ Features: Vents based on setpoints and outside/attic sensor differences. Use wit
 App: Attic Fan Controller App - Updates the driver attributes from the sensors. Controls the physical fan device, on/off and/or speed by subscribing to driver    attributes operatingState and fanSpeed. 
 Driver: Attic Fan Controller - Controls all cycle logic and settings. 
 Install: Add the driver code and create a virtual Attic Fan Controller device.  Add the app code, then install it as a user app. Choose your devices in the app.   
+Rules: Vent for humidity if over setpoint and outside humidity is less than attic humidity. Vent for temperature if above setpoint and outside temperature is less than attic temperature, and outside humidity less than humidity-temp setpoint. 
