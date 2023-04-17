@@ -1,13 +1,13 @@
 /*
 	Attic Fan Controller
 
-	Copyright 2022 -> C. Burgess
+	Copyright 2023 -> C. Burgess
 
 	This driver works with a companion app, "Attic Fan Controller App", to control an attic fan to vent for temperature and/or humidity.  
 
 	v. 1.0 - 4/8/23  - Inital code to create an attic fan controller using temp and humidity to turn on a fan switch
 	v. 1.2 - 4/11/23 - Updated to use a fan speed controller (low, medium, high) and set fan speed manually or auto in pref.  Auto sets speed based on humidity and temperature differences. 
-    v. 1.5 - 4/14/23 - Added Pref for setting the fan speed thresholds (difference between out and in temp or humidity to change to medium or high)
+    v. 1.5 - 4/14/23 - Added Pref for setting the fan speed thresholds (difference between temp or humidity setpoints to change to medium or high)
 */
 
 metadata {
@@ -16,14 +16,13 @@ metadata {
 		namespace: "hubitat",
 		author: "Chris B"
 	) {
-        capability "Light"
+        //capability "Light"
         capability "Switch"           // makes this a switch device, if needed
 		capability "Actuator"
-        capability "Presence Sensor"  // overidden as presence of "humidity", "temperature", "both" or "none"
+        capability "Presence Sensor"  // overidden as presence of "humidity", "temperature", "both" or "none" (for dashboard colors)
 
 		// attributes
 		attribute "operatingState", "ENUM"  		// ["venting", "idle"]
-		attribute "hysteresis", "NUMBER"    		// 
 		attribute "atticHumidity", "ENUM"	        // set from app
 		attribute "outsideHumidity", "ENUM"			// set from app
 		attribute "display", "STRING"       	    // attribute for dashboad status tile showing temps, humids, operatitonal state and what venting for. 
@@ -47,7 +46,6 @@ metadata {
         command "setAtticTempSetpoint", ["NUMBER"]
         command "setAtticHumidSetpoint", ["ENUM"]
         command "setFanSpeed", [[name:"fanSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["low","medium","high"]]]
-        //command "setFanMode", [[name:"fanMode",type:"ENUM", description:"Set Fan Mode", constraints:["auto","manual"]]]
         command "setPresence", [[name:"presence",type:"ENUM", description:"Set Why Venting", constraints:["humidity","temperature","both","none"]]]
 }
 
@@ -72,7 +70,6 @@ def installed() {
     setAtticTemp(75.0)
     setAtticTempSetpoint(80)
     setfanSpeed("auto")
-    setHysteresis(0)
     setOutsideHumidity(50)
     setOutsideTemp(75.0)
     setOutsideHumidity(50)
@@ -129,7 +126,7 @@ Integer limitIntegerRange(value,min,max) {
 def setDisplay() {
 	logDebug "setDisplay() was called"
     String display = "Attic: "+(device.currentValue("atticHumidity"))+"% "+(device.currentValue("atticTemp"))+"°<br>  Out: "+(device.currentValue("outsideHumidity"))+"% "+(device.currentValue("outsideTemp"))+"°<br> "+(device.currentValue("operatingState"))+" "+(device.currentValue("presence")) 
-    String display2 = "Humid Temp: "+settings?.maxTempHumidity+"% <br>  %H. Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"% <br> °T. Setpoint: "+(device.currentValue("atticTempSetpoint"))+"° <br> Fan Speed: "+(device.currentValue("fanSpeed")) 
+    String display2 = "%° Setpoint: "+settings?.maxTempHumidity+"% <br>  % Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"% <br> ° Setpoint: "+(device.currentValue("atticTempSetpoint"))+"° <br> Fan Speed: "+(device.currentValue("fanSpeed")) 
     sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
     sendEvent(name: "display2", value: display2, descriptionText: getDescriptionText("display2 set to ${display2}"))
 }
@@ -155,14 +152,13 @@ def manageCycle() {
 	def atticTempSetpoint = (device.currentValue("atticTempSetpoint")).toBigDecimal()
 
 	def operatingState = device.currentValue("operatingState")
-	def hysteresis = (hysteresis ?: 0.5).toBigDecimal()
 	def presence = device.currentValue("presence")
 	def fanMode = device.currentValue("fanMode")
     
 	// temp and humidity checks
 	def humidTemp = (outsideHumidity <= settings?.maxTempHumidity.toInteger())
-	def atticHumidityOn = (atticHumidity > outsideHumidity) && (atticHumidity > atticHumidSetpoint)		  // checks to vent for humidity difference (no offset)
-	def runTemp = (atticHumidity > outsideHumidity) && humidTemp     // checks humidity difference and humidTemp setpoint before venting for temperature difference
+	def atticHumidityOn = (atticHumidity > outsideHumidity) && (atticHumidity > atticHumidSetpoint)		  // checks if vent for temp within outside humidity setpoint
+	def runTemp = (atticHumidity < outsideHumidity) || humidTemp     // checks humidity difference and humidTemp setpoint before venting for temperature difference
 	def tempOn = (atticTemp > outsieTemp) && (atticTemp > atticTempSetpoint)  // checks to vent for temp difference only if attic temp greater than setpoint. 
 
     // define temperature actions
@@ -209,29 +205,30 @@ def manageCycle() {
 		def humidDiff = atticHumidity - atticHumidSetpoint
 		def tempDiff = atticTemp - atticTempSetpoint
 
-	    def diff = humidDiff
+	    def diffUsed = "humid"
 
 	    if (presence == "temperature") {
-	        diff = tempdiff
+	        diffUsed = "temp"
 	        logDebug("Using Temperature Difference $diff")       
 	    	} else if (presence == "humidity") {
 		        logDebug("Using Humidity Difference of $diff")
 		    } else if (presence == "both") {
 	    		if (tempDiff > humidDiff) {
-	    			diff = tempDiff
+	    			diffUsed = "temp"
 	    			logDebug("Using Temperature Difference $diff") 
 	    		} else {
-	    			diff = humidDiff
+	    			diffUsed = "humid"
 	    			logDebug("Using Humidity Difference of $diff")
 	    		}
    			} else if (presence == "none") {
 	        	logDebug("speed not set - none")
-	        	diff = 0
+	        	diffUsed = "none"
 	    	}
-
+        if (diffUsed == "humid") def diff = humidDiff
+            else def diff = tempDiff
 		def medDiff = settings?.fanMediumThreshold.toInteger()
         def highDiff = settings?.fanHighThreshold.toInteger()
-	    if (diff > 0) {
+	    if (diff > 0 && diffUsed != "none") {
 	        if (diff > 0 && diff < medDiff) {
 	            setFanSpeed("low")
 	            logDebug("speed set to low")
@@ -287,12 +284,6 @@ def setOutsideHumidity(setpoint) {
 	logDebug "setOutsideHumidity(${setpoint}) was called"
     sendEvent(name: "outsideHumidity", value: setpoint, descriptionText: getDescriptionText("outsideHumidity set to ${setpoint}"))
     runIn(1, manageCycle)    
-}
-
-def setHysteresis(setpoint) {
-	logDebug "setHysteresis(${setpoint}) was called"
-    sendEvent(name: "hysteresis", value: setpoint, descriptionText: getDescriptionText("hysteresis set to ${setpoint}"))
-    runIn(1, manageCycle)
 }
 
 def setAtticTemp(temp) {
