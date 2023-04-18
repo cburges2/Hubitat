@@ -12,3 +12,4 @@ App: Attic Fan Controller App - Updates the driver attributes from the sensors. 
 Driver: Attic Fan Controller - Controls all cycle logic and settings. 
 Install: Add the driver code and create a virtual Attic Fan Controller device.  Add the app code, then install it as a user app. Choose your devices in the app.   
 Rules: Vent for humidity if over setpoint and outside humidity is less than attic humidity. Vent for temperature if above setpoint and outside temperature is less than attic temperature, and outside humidity less than humidity-temp setpoint. 
+Dashboard Icons: Presence is used for a dasboard status tile.  Colors can be set in the dashboard json Advanced settings for the different states, and the custom icons can be set by presence state in the Advanced settings CSS. (states: temperature, humidity, both, none)
