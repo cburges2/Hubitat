@@ -8,6 +8,7 @@
 	v. 1.0 - 4/8/23  - Inital code to create an attic fan controller using temp and humidity to turn on a fan switch
 	v. 1.2 - 4/11/23 - Updated to use a fan speed controller (low, medium, high) and set fan speed manually or auto in pref.  Auto sets speed based on humidity and temperature differences. 
     v. 1.5 - 4/14/23 - Added Pref for setting the fan speed thresholds (difference between temp or humidity setpoints to change to medium or high)
+    v. 1.6 - 4/25/23 - Added Override Temp to vent for Temperature if attic temp is over override temp, regardless of outside humidity. 
 */
 
 metadata {
@@ -52,7 +53,8 @@ metadata {
 	preferences {
 		input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
 		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
-		input( name: "maxTempHumidity", type:"enum", title: "Max Outside Humidity to run for Temperature", defaultValue:"55", options:[30:"30%",35:"35%",40:"40%",45:"45%",50:"50%",55:"55%",60:"60%",65:"65%",70:"70%"])
+		input( name: "maxTempHumidity", type:"enum", title: "Max Outside Humidity to run for Temperature", defaultValue:"55", options:[30:"30%",35:"35%",40:"40%",45:"45%",50:"50%",55:"55%",60:"60%",65:"65%",70:"70%",75:"75%"])
+		input( name: "overrideTemp", type:"number", title: "Attic Temp that overrides Max Outside Humidity", defaultValue:"95", options:[75:"75°",80:"80°",85:"85°",90:"90°",95:"95°",100:"100°",105:"105°",110:"110°",115:"115°"])
 		input( name: "autoFan", type:"bool", title: "Enable auto fan speed", defaultValue:true)
 		input( name: "fanMediumThreshold", type:"enum", title: "Fan Medium Speed Threshold", defaultValue:"3", options:[1:"1",2:"2",3:"3",4:"4",5:"5"])
 		input( name: "fanHighThreshold", type:"enum", title: "Fan High Speed Threshold", defaultValue:"6", options:[3:"3",4:"4",5:"5",6:"6",7:"7",8:"8",9:"9",10:"10",11:"11",12:"12"])
@@ -154,11 +156,13 @@ def manageCycle() {
 	def operatingState = device.currentValue("operatingState")
 	def presence = device.currentValue("presence")
 	def fanMode = device.currentValue("fanMode")
+	def maxHumid = settings?.maxTempHumidity.toInteger()
+	def maxTemp = settings?.overrideTemp.toBigDecimal()
     
 	// temp and humidity checks
-	def humidTemp = (outsideHumidity <= settings?.maxTempHumidity.toInteger())
+	def humidTemp = (outsideHumidity <= maxHumid) || (atticTemp > maxTemp)
 	def atticHumidityOn = (atticHumidity > outsideHumidity) && (atticHumidity > atticHumidSetpoint)		  // checks if vent for temp within outside humidity setpoint
-	def runTemp = (atticHumidity < outsideHumidity) || humidTemp     // checks humidity difference and humidTemp setpoint before venting for temperature difference
+	def runTemp = (atticHumidity < outsideHumidity) && humidTemp     // checks humidity difference and humidTemp setpoint before venting for temperature difference
 	def tempOn = (atticTemp > outsieTemp) && (atticTemp > atticTempSetpoint)  // checks to vent for temp difference only if attic temp greater than setpoint. 
 
     // define temperature actions
@@ -175,7 +179,7 @@ def manageCycle() {
 	logDebug "offHumid is (${offHumid})"
 
     // if any conditions are true, update presence
-	if ((offTemp==true && offHumid==true) && (onTemp==false && onHumid==false)) {
+	if ((offTemp==true || offHumid==true) && (onTemp==false && onHumid==false)) {
 		setPresence("none")
 		presence = "none"		
 	} 
@@ -209,16 +213,16 @@ def manageCycle() {
 
 	    if (presence == "temperature") {
 	        diffUsed = "temp"
-	        logDebug("Using Temperature Difference $diff")       
+	        logDebug("Using Temperature Difference $diffUsed")       
 	    	} else if (presence == "humidity") {
-		        logDebug("Using Humidity Difference of $diff")
+		        logDebug("Using Humidity Difference of $diffUsed")
 		    } else if (presence == "both") {
 	    		if (tempDiff > humidDiff) {
 	    			diffUsed = "temp"
-	    			logDebug("Using Temperature Difference $diff") 
+	    			logDebug("Using Temperature Difference $diffUsed") 
 	    		} else {
 	    			diffUsed = "humid"
-	    			logDebug("Using Humidity Difference of $diff")
+	    			logDebug("Using Humidity Difference of $diffUsed")
 	    		}
    			} else if (presence == "none") {
 	        	logDebug("speed not set - none")
