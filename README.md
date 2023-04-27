@@ -3,6 +3,8 @@ Hubitat Drivers, Apps, and Dashboard Icons
 
 This repository contains my personal drivers and simple apps I wrote to use on Hubitat. 
 
+Dashboard Icons are hosted here: https://github.com/cburges2/ecowitt.github.io/tree/main/Dashboard%20Icons
+
 Attic Fan Controller
 
 A driver and app combo to run an attic fan. Vents for humidity and temperature.
