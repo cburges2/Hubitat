@@ -1,0 +1,18 @@
+function delete7() {
+
+  var ss = SpreadsheetApp.openById("13i6CGmZ7LpZ9nTUxkN_sd3n-AYPMNDNzXXt3fpH0I5Y");   
+  var actualSheetName = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getName();
+  var xtab = request.parameter[actualSheetName]; 
+  sheet = ss.getSheetByName(tab);
+  var values = sheet.getDataRange().getValues();
+  var pastDate = new Date();
+  var deleteDays = 7
+  pastDate.setDate(pastDate.getDate()-deleteDays);
+
+  for( var row = values.length -1; row >= 1; --row ) { 
+    var cellDate = values[row][0];
+    if (cellDate < pastDate) {
+      sheet.deleteRow(parseInt(row)+1);
+    }
+  }  
+}
