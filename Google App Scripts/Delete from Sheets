@@ -1,6 +1,6 @@
 function doGet(request) {
 
-  var ss = SpreadsheetApp.openById("13i6CGmZ7LpZ9nTUxkN_sd3n-AYPMNDNzXXt3fpH0I5Y");
+  var ss = SpreadsheetApp.openById("<sheet ID here>");
   var xtab = request.parameter["sheet"];             
   var tab = xtab.replace("%20"," ");
   console.log(tab);
