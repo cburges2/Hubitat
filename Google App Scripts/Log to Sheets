@@ -2,7 +2,7 @@
 function doGet(request) {
   if(request != null) {
 
-    var ss = SpreadsheetApp.openById("13i6CGmZ7LpZ9nTUxkN_sd3n-AYPMNDNzXXt3fpH0I5Y");
+    var ss = SpreadsheetApp.openById("<sheet ID here>");
     sheet = ss.getSheetByName(request.parameter["XtabX"]);
     firstRowRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
     sheetHeaders=firstRowRange.getValues();
