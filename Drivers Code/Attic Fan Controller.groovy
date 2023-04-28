@@ -26,8 +26,9 @@ metadata {
 		attribute "operatingState", "ENUM"  		// ["venting", "idle"]
 		attribute "atticHumidity", "ENUM"	        // set from app
 		attribute "outsideHumidity", "ENUM"			// set from app
-		attribute "display", "STRING"       	    // attribute for dashboad status tile showing temps, humids, operatitonal state and what venting for. 
-        attribute "display2", "STRING"				// attribute for dashboad status tile showing fanSpeed, setpoints and offset. 
+		attribute "display", "STRING"       	    // attribute for dashboard status tile showing temps, humids, operatitonal state and what venting for. 
+        attribute "display2", "STRING"				// attribute for dashboard status tile showing fanSpeed, setpoints and offset. 
+		attribute "display3", "STRING"              // attribute for dashboard status tile showing autoFanSpeed setting and the set Fan Speed. 
         attribute "atticTemp", "NUMBER"             // set from app
         attribute "outsideTemp", "NUMBER"           // set from app
         attribute "atticTempSetpoint", "NUMBER"     // fan will not run for temperature difference if attic temp is less than this setpoint (will still run for humidity)
@@ -36,7 +37,7 @@ metadata {
         attribute "presence", "ENUM"                // venting for humidity, temp, both, or none
 		attribute "maxTempHumidity","ENUM"          // max outside humidity to allow for temperature venting (set in preferences)
 		attribute "overrideTemp","NUMBER"			// attic temp where fan will run regardless of outside humidtiy and max temp humidity setting (set in prefrences)
-		attribute "icon", "STRING"
+		attribute "icon", "STRING"                  // status icon attribute to be use on a dashboard tile
 
 		// Commands needed to change internal attributes of virtual device.
         command "setOperatingState", [[name:"operatingState",type:"ENUM", description:"Set Operating State", constraints:["venting","idle"]]]
@@ -131,10 +132,14 @@ Integer limitIntegerRange(value,min,max) {
 
 def setDisplay() {
 	logDebug "setDisplay() was called"
-    String display = "Attic: "+(device.currentValue("atticHumidity"))+"% "+(device.currentValue("atticTemp"))+"°<br>  Out: "+(device.currentValue("outsideHumidity"))+"% "+(device.currentValue("outsideTemp"))+"°<br> "+(device.currentValue("operatingState"))+" "+(device.currentValue("presence")) 
+    String display = "Attic: "+(device.currentValue("atticHumidity"))+"% "+(device.currentValue("atticTemp"))+"°<br>  Out: "+(device.currentValue("outsideHumidity"))+"% "+(device.currentValue("outsideTemp"))+"°<br> "+(device.currentValue("operatingState"))+"<br>"+(device.currentValue("presence")) 
     String display2 = "%° Setpoint: "+settings?.maxTempHumidity+"%<br>°% Setpoint: "+settings?.overrideTemp+"°<br>% Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"% <br> ° Setpoint: "+(device.currentValue("atticTempSetpoint"))+"°" 
-    sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
+    def autoFan = "auto"
+	if (settings?.autoFan == false) autoFan ="manual"
+	String display3 = "Fan: "+autoFan+"<br>Speed: "+device.currentValue("fanSpeed")+"<br>"
+	sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
     sendEvent(name: "display2", value: display2, descriptionText: getDescriptionText("display2 set to ${display2}"))
+	sendEvent(name: "display3", value: display3, descriptionText: getDescriptionText("display3 set to ${display3}"))
 	setPrefAttributes()
 }
 
@@ -171,13 +176,18 @@ def manageCycle() {
 	def maxTemp = settings?.overrideTemp.toBigDecimal()
     
 	// temp and humidity checks
-	def humidTemp = (outsideHumidity <= maxHumid) || (atticTemp > maxTemp)
-	def atticHumidityOn = (atticHumidity > outsideHumidity) && (atticHumidity > atticHumidSetpoint)		  // checks if vent for temp within outside humidity setpoint
-	def runTemp = (atticHumidity < outsideHumidity)                           // checks humidity difference and humidTemp setpoint before venting for temperature difference
-	def tempOn = (atticTemp > outsieTemp) && (atticTemp > atticTempSetpoint)  // checks to vent for temp difference only if attic temp greater than setpoint. 
+	def humidTemp = (outsideHumidity <= maxHumid) || (atticTemp > maxTemp)       						// check humidity restrictions before running for temp
+	def atticHumidityOn = (atticHumidity > outsideHumidity) && (atticHumidity > atticHumidSetpoint)		// checks if vent for temp within outside humidity setpoint
+	def runTemp = (atticHumidity < outsideHumidity) || (atticHumidity < atticHumidSetpoint)	            // checks humidity difference and humidTemp setpoint before venting for temperature difference
+	def tempOn = (atticTemp > outsideTemp) && (atticTemp > atticTempSetpoint)  // checks to vent for temp difference only if attic temp greater than setpoint. 
+
+	logDebug "humidTemp is (${humidTemp})"
+	logDebug "atticHumidityOn is (${atticHumidityOn})"
+	logDebug "runTemp is (${runTemp})"
+	logDebug "tempOn is (${tempOn})"
 
     // define temperature actions
-	def onTemp = (tempOn && runTemp && humidTemp)             // vent for temp if idle, and humidity in range 
+	def onTemp = (tempOn && runTemp && humidTemp) || (tempOn && atticHumidityOn)            // vent for temp if idle, and humidity in range 
 	def offTemp = (!tempOn && !atticHumidityOn)  // idle for temp if venting, unless needs to stay on for humidity
 
     // define humidity actions
@@ -196,7 +206,7 @@ def manageCycle() {
 		setIcon("attic-idle.svg")	
 	} 
 
-	if ((offTemp==false && offHumid==false) && (onTemp==true & onHumid==true)) {
+	if ((offTemp==false && offHumid==false) && (onTemp==true && onHumid==true)) {
 		setPresence("both")
 		presence = "both"
 		setIcon("temp-humidity.svg")
