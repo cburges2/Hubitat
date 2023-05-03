@@ -16,3 +16,7 @@ Install: Add the driver code and create a virtual Attic Fan Controller device.  
 Rules: Vent for humidity if over setpoint and outside humidity is less than attic humidity. Vent for temperature if above setpoint and outside temperature is less than attic temperature, and outside humidity less than humidity-temp setpoint. 
 Dashboard Icons: Presence is used for a dasboard status tile.  Colors can be set in the dashboard json Advanced settings for the different states, and the custom icons can be set by presence state in the Advanced settings CSS. (states: temperature, humidity, both, none)
 Another companion app, Attic Fan Controller Sync, lets you use Variable Connectors (number) to update setpoints from the Dashboard. The app syncs the setpoints in the driver to the Variable Connectors (which are virtual devices). Create a Temperature setpoint and a humdity setpoint variable connectors, as numbers, and choose them in the sync app at install. Changes in the driver will show in the connectors, and changes in the connectors will update the driver attributes. 
+
+Google App Scripts
+
+Scripts I use to log Hubitat Data to Google Sheets.  One script is used for the logging, and the other is used to mangage log size based on days to retain. I call the scripts from Webcore to send the data. 
