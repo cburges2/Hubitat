@@ -163,7 +163,7 @@ def mainPage() {
             } else {
                 state.useSpeed = false
                 input (
-                    name: "switch", 
+                    name: "fanSwitch", 
                     type: "capability.switch", 
                     title: "Select Attic Fan Switch Device", 
                     required: true, 
@@ -259,24 +259,22 @@ def setOperatingState(evt) {
 
 def fanOff() {
     if (state.useSpeed) {
-        fan.setSpeed("off")
         fan.off()
-    } else fan.off()
+    } else fanSwitch.off()
     state.fanSwitch = "off"  
 }
 
 def fanOn() {
     if (state.useSpeed) {
-        fan.setSpeed(state.fanSpeed)
         fan.on()
-    } else fan.on()
+    } else fanSwitch.on()
     state.fanSwitch = "on"
 }
 
 def setSpeed(evt) {
     state.fanSpeed = evt.value.toString()
-    if (state.fanSwitch == "on") {
-        fan.setSpeed(state.fanSpeed)                   // update current speed
+    if (state.fanSwitch == "on" && state.useSpeed) {
+        fan.setSpeed(state.fanSpeed)                   // update current speed if using
     } 
 }
 
