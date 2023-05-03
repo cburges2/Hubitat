@@ -63,8 +63,8 @@ metadata {
 		input( name: "maxTempHumidity", type:"enum", title: "Max Outside Humidity to run for Temperature", defaultValue:"55", options:[30:"30%",35:"35%",40:"40%",45:"45%",50:"50%",55:"55%",60:"60%",65:"65%",70:"70%",75:"75%"])
 		input( name: "overrideTemp", type:"number", title: "Attic Temp that overrides Max Outside Humidity", defaultValue:"95")
 		input( name: "autoFan", type:"bool", title: "Enable auto fan speed", defaultValue:true)
-		input( name: "fanMediumThreshold", type:"enum", title: "Fan Medium Speed Threshold", defaultValue:"3", options:[1:"1",2:"2",3:"3",4:"4",5:"5"])
-		input( name: "fanHighThreshold", type:"enum", title: "Fan High Speed Threshold", defaultValue:"6", options:[3:"3",4:"4",5:"5",6:"6",7:"7",8:"8",9:"9",10:"10",11:"11",12:"12"])
+		input( name: "fanMediumThreshold", type:"enum", title: "Fan Medium Speed Difference", defaultValue:"3", options:[1:"1",2:"2",3:"3",4:"4",5:"5"])
+		input( name: "fanHighThreshold", type:"enum", title: "Fan High Speed Difference", defaultValue:"6", options:[3:"3",4:"4",5:"5",6:"6",7:"7",8:"8",9:"9",10:"10",11:"11",12:"12"])
 	}
 }
 
@@ -139,8 +139,9 @@ def setDisplay() {
     String iconText = (device.currentValue("atticHumidity"))+"% "+(device.currentValue("atticTemp"))+"°"
 	def autoFan = "auto"
 	if (settings?.autoFan == false) autoFan ="manual"	
-	String displayAll = "Attic Humidity: "+(device.currentValue("atticHumidity"))+"%<br>Attic Temperature: "+(device.currentValue("atticTemp"))+"°<br><br>Outside Humidity: "+(device.currentValue("outsideHumidity"))+"%<br>Outside Temperature:   "+(device.currentValue("outsideTemp"))+"°<br><br>Operating State:  "+(device.currentValue("operatingState"))+"<br>Venting:       "+(device.currentValue("presence"))+"<br><br>"+
-	    "Max Humidity for Temp: "+settings?.maxTempHumidity+"%<br>Temp Override Humidity: "+settings?.overrideTemp+"°<br><br>Attic Humidity Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"% <br>Attic Temperature Setpoint: "+(device.currentValue("atticTempSetpoint"))+"°<br><br>Fan Setting: "+autoFan+"<br>Fan Speed: "+device.currentValue("fanSpeed")
+	String displayAll = "Attic Humidity: "+(device.currentValue("atticHumidity"))+"%<br>Outside Humidity: "+(device.currentValue("outsideHumidity"))+"%<br>Humidity Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"%<br><br>Attic Temperature: "+(device.currentValue("atticTemp"))+"°<br>Outside Temperature:   "+(device.currentValue("outsideTemp"))+"°<br>Temperature Setpoint: "+(device.currentValue("atticTempSetpoint"))+"°<br><br>Operating State:  "+(device.currentValue("operatingState"))+"<br>Venting:       "+(device.currentValue("presence"))+"<br><br>"+
+	    "Max Humidity for Temp: "+settings?.maxTempHumidity+"%<br>Temp Override Humidity: "+settings?.overrideTemp+"°<br><br>Fan Setting: "+autoFan+"<br>Fan Speed: "+device.currentValue("fanSpeed")+"<br>"+
+		"<br>Medium Speed Difference: "+settings?.fanMediumThreshold+"°%<br>High Speed Difference: "+settings?.fanHighThreshold+"°%"
 	String display3 = "Fan: "+autoFan+"<br>Speed: "+device.currentValue("fanSpeed")+"<br>"
 	sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
     sendEvent(name: "display2", value: display2, descriptionText: getDescriptionText("display2 set to ${display2}"))
