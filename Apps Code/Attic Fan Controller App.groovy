@@ -266,13 +266,13 @@ def fanOff() {
 
 def fanOn() {
     if (state.useSpeed) {
-        fan.on()
+        fan.setSpeed(state.fanSpeed)
     } else fanSwitch.on()
     state.fanSwitch = "on"
 }
 
 def setSpeed(evt) {
-    state.fanSpeed = evt.value.toString()
+    state.fanSpeed = evt.value
     if (state.fanSwitch == "on" && state.useSpeed) {
         fan.setSpeed(state.fanSpeed)                   // update current speed if using
     } 
