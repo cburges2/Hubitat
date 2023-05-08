@@ -59,6 +59,7 @@ metadata {
         input( name: "chilly", type: "number", description: "Temperature you consider to be chilly water", title: "Set Water Comfort Chilly", defaultValue: 69)
         input( name: "warm", type: "number", description: "Temperature you consider to be warm water", title: "Set Water Comfort Warm", defaultValue: 74)
         input( name: "hot", type: "number", description: "Temperature you consider to be hot water", title: "Set Water Comfort Hot", defaultValue: 80)
+        input( name: "iconPath", type: "string", description: "Address Path to icons", title: "Set Icon Path", defaultValue: "https://cburges2.github.io/ecowitt.github.io/Dashboard%20Icons/")
     }
 }
 
@@ -134,7 +135,7 @@ def manageCycle() {
     def operatingState = device.currentValue("operatingState")
 
     // Checks
-    def turnOnIllum = illum >= onIllum
+    def turnOnIllum = (illum >= onIllum) && (temp >= poolTemp)
     def turnOffIllum = (illum < onIllum)
     def turnOnTemp = (temp >= onTemp ) && (poolTemp < offTemp) 
     def turnOffTemp = (temp < onTemp) || (poolTemp >= offTemp) || (temp < poolTemp)
@@ -254,13 +255,17 @@ def setPresence(setpoint) {
 }
 
 def setTempIcon(img) {
-    String iconPath = "https://cburges2.github.io/ecowitt.github.io/Dashboard%20Icons/"
-    sendEvent(name: "tempIcon", value: "<img class='icon' src='${iconPath}${img}' />")
+    if (state.tempIcon != img) {
+        sendEvent(name: "tempIcon", value: "<img class='icon' src='${settings?.iconPath}${img}' />")
+        state.tempicon = img
+    }
 }
 
 def setIcon(img) {
-    String iconPath = "https://cburges2.github.io/ecowitt.github.io/Dashboard%20Icons/"
-    sendEvent(name: "icon", value: "<img class='icon' src='${iconPath}${img}' />")
+    if (state.icon != img) {
+        sendEvent(name: "icon", value: "<img class='icon' src='${settings?.iconPath}${img}' />")
+        state.icon = img
+    }
 }
 
 private logDebug(msg) {

@@ -17,14 +17,15 @@ metadata {
         capability "ChangeLevel"
         capability "Actuator"
         capability "Contact Sensor" //"open", "closed"
+        capability "Lock"
 }
 
     preferences {
         input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
         input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
+        input name: "forceUpdate", type: "bool", title: "Force State Update", description: "Send event everytime, regardless of current status. ie Send/Do On even if already On.",  defaultValue: false
     }
 }
-
 
 def installed() {
     log.warn "installed..." 
@@ -57,24 +58,32 @@ private eventSend(name,verb,value,unit = ""){
 
 def off() {
     String verb = (device.currentValue("switch") == "off") ? "is" : "was turned"
+    close()
     eventSend("switch",verb,"off") 
-    sendEvent(name: "contact", value: "closed", isStateChange: forceUpdate)
-    //logTxt "turned Off"
 }
 
 def on() {
     String verb = (device.currentValue("switch") == "on") ? "is" : "was turned"
+    open()
     eventSend("switch",verb,"on")
-    sendEvent(name: "contact", value: "open", isStateChange: forceUpdate)
-    //logTxt "turned On"
 }
 
 def close(){
-    off()
+    sendEvent(name: "contact", value: "closed", isStateChange: forceUpdate)
+    lock()
 }
 
 def open(){
-    on()
+    sendEvent(name: "contact", value: "open", isStateChange: forceUpdate)
+    unlock()
+}
+
+def lock(){
+    sendEvent(name: "lock", value: "locked", isStateChange: forceUpdate)
+}
+
+def unlock(){
+    sendEvent(name: "lock", value: "unlocked", isStateChange: forceUpdate)
 }
 
 def setLevel(value, rate = null) {
@@ -93,7 +102,6 @@ Integer limitIntegerRange(value,min,max) {
     Integer limit = value.toInteger()
     return (limit < min) ? min : (limit > max) ? max : limit
 }
-
 
 private logDebug(msg) {
     if (settings?.logEnable) log.debug "${msg}"

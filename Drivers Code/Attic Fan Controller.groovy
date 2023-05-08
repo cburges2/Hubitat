@@ -65,6 +65,7 @@ metadata {
 		input( name: "autoFan", type:"bool", title: "Enable auto fan speed", defaultValue:true)
 		input( name: "fanMediumThreshold", type:"enum", title: "Fan Medium Speed Difference", defaultValue:"3", options:[1:"1",2:"2",3:"3",4:"4",5:"5"])
 		input( name: "fanHighThreshold", type:"enum", title: "Fan High Speed Difference", defaultValue:"6", options:[3:"3",4:"4",5:"5",6:"6",7:"7",8:"8",9:"9",10:"10",11:"11",12:"12"])
+		input( name: "iconPath", type: "string", description: "Address Path to icons", title: "Set Icon Path", defaultValue: "https://cburges2.github.io/ecowitt.github.io/Dashboard%20Icons/")
 	}
 }
 
@@ -199,7 +200,7 @@ def manageCycle() {
 	def offTemp = (!tempOn && !atticHumidityOn)  // idle for temp if venting, unless needs to stay on for humidity
 
     // define humidity actions
-	def onHumid = (atticHumidityOn && humidTemp)   // vent for humidity if idle and within checks
+	def onHumid = (atticHumidityOn && humidTemp) || (atticHumidityOn && (atticHumidity > outsideHumidity))  // vent for humidity if within checks
 	def offHumid = (!atticHumidityOn)              // idle for humidity if not already idle
 
 	logDebug "onTemp is (${onTemp})"
@@ -369,8 +370,8 @@ def setFanMode(mode) {
 }
 
 def setIcon(img) {
-    String iconPath = "https://cburges2.github.io/ecowitt.github.io/Dashboard%20Icons/"
-    sendEvent(name: "icon", value: "<img class='icon' src='${iconPath}${img}' />")
+    logDebug "setIcon(${img}) was called"
+    sendEvent(name: "icon", value: "<img class='icon' src='${settings?.iconPath}${img}' />")
 }
 
 private logDebug(msg) {
