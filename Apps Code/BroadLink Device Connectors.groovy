@@ -2,7 +2,7 @@
  *  ****************  Broadlink Device Connectors  ****************
  *
  *  Usage:
- *  This was designed to sync up to five virtual switches to Broadlink Virtual Device codes
+ *  This was designed to sync up to five virtual switches to Broadlink Virtual Device code names
  *
 **/
 
@@ -10,7 +10,7 @@ definition (
     name: "Broadlink Device Connectors",
     namespace: "Hubitat",
     author: "Burgess",
-    description: "Controller for Hubitat Scene Switches connected to Replica by scene knob devices",
+    description: "Controller for virtual switches to trigger broadlink RF code names in Broadlink driver",
     category: "My Apps",
     iconUrl: "",
     iconX2Url: ""
