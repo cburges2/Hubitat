@@ -7,6 +7,10 @@ Dashboard Icons are hosted here: https://github.com/cburges2/ecowitt.github.io/t
 
 Most of my drivers that control switches also set a contact sensor and/or lock, and/or motion sensor attributes with on/off. If your devices are Alexa controlled, you can use this to directly trigger an Alexa routine to control a device based on contact open/close, lock locked/unlocked, or motion active/inactive. In these cases, do not set up the optional switch device in the app. 
 
+I also commonly use on overloaded presence sensor attribute for status.  This allows setting dashboard icon background colors by setting colors in the Dashboard Advanced JSON by presence template type (template tile colors at top of file).  I also update status icon attributes in the drivers for use as dashbaord attributes icons. By layering dashboard tiles using transparency, you can create status tiles that change colors and icons with the states. The icons have a path in prefrences that point to my icon repository here, however that can be changed to use another location, such as the hub local files. 
+
+I also set display attributes in my drivers for use on Dashbaords.  These provide summary information about the current states and setpoints to make a dashboard status tiles. 
+
 Attic Fan Controller
 
 A driver and app combo to run an attic fan. Vents for humidity and temperature.
