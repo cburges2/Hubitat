@@ -363,16 +363,16 @@ def initialize() {
 
     subscribe(virtualSwitch, "switch", switchHandler) 
     if (state.more1) {
-        subscribe(virtualSwitch2, "switch2", switchHandler2)
+        subscribe(virtualSwitch2, "switch", switchHandler2)
     }
     if (state.more2) {
-        subscribe(virtualSwitch3, "switch3", switchHandler3)
+        subscribe(virtualSwitch3, "switch", switchHandler3)
     }
     if (state.more3) {
-        subscribe(virtualSwitch4, "switch4", switchHandler4)
+        subscribe(virtualSwitch4, "switch", switchHandler4)
     }
     if (state.more4) {
-        subscribe(virtualSwitch5, "switch5", switchHandler5)
+        subscribe(virtualSwitch5, "switch", switchHandler5)
     }
 }    
 
