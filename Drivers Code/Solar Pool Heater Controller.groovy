@@ -37,6 +37,8 @@ metadata {
         attribute "presence", "ENUM"
         attribute "lock", "ENUM"
         attribute "icon", "STRING"                  // status icon attribute to be use on a dashboard tile
+        attribute "iconFile", "STRING"
+        attribute "tempIconFile", "STRING"
         
 		// Commands needed to change internal attributes of virtual device.
         command "setDisplay"
@@ -135,7 +137,7 @@ def manageCycle() {
     def operatingState = device.currentValue("operatingState")
 
     // Checks
-    def turnOnIllum = (illum >= onIllum) && (temp >= poolTemp)
+    def turnOnIllum = (illum >= onIllum) && (temp >= (poolTemp+10.0))
     def turnOffIllum = (illum < onIllum)
     def turnOnTemp = (temp >= onTemp ) && (poolTemp < offTemp) 
     def turnOffTemp = (temp < onTemp) || (poolTemp >= offTemp) || (temp < poolTemp)
@@ -144,7 +146,7 @@ def manageCycle() {
         setPresence("Solar")
         setIcon("heater-solar.svg")
     }
-    if (turnOnTemp && !turnOnSolar) {
+    if (turnOnTemp && !turnOnIllum) {
         setPresence("Temperature")
         setIcon("heater-temp.svg")
     }
@@ -189,6 +191,7 @@ def setHeaterTemp(setpoint) {
 	logDebug "setHeaterTemp(${setpoint}) was called"
     sendEvent(name: "heaterTemp", value: setpoint, descriptionText: getDescriptionText("heaterTemp set to ${setpoint}"))
     runIn(1, manageCycle)
+    runIn(1, setDisplay)
 }
 
 def setPoolTemp(setpoint) {    
@@ -255,16 +258,22 @@ def setPresence(setpoint) {
 }
 
 def setTempIcon(img) {
-    if (state.tempIcon != img) {
+    logDebug "setTempIcon(${img}) was called"
+    def current = device.currentValue("tempIconFile")
+    logDebug "Image Match is ${current == img}"
+    if (current != img) {
         sendEvent(name: "tempIcon", value: "<img class='icon' src='${settings?.iconPath}${img}' />")
-        state.tempicon = img
+        sendEvent(name: "tempIconFile", value: img)
     }
 }
 
 def setIcon(img) {
-    if (state.icon != img) {
+    logDebug "setIcon(${img}) was called"
+    def current = device.currentValue("iconFile")
+    logDebug "Image Match is ${current == img}"  
+    if (current != img) {
         sendEvent(name: "icon", value: "<img class='icon' src='${settings?.iconPath}${img}' />")
-        state.icon = img
+        sendEvent(name: "iconFile", value: img) 
     }
 }
 
