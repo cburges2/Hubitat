@@ -3,9 +3,11 @@
  *
  *  Usage:
  *  This was designed to update a virtual irrigation controller virtual device from an external soil moisture sensor
+ *  It also syncs settings attributes with hub variable devices to be used in dashboards. 
  *    
  *  v.1.0 4/19/23  Initial code
  *  v.1.5 4/26/23  Added water and fertilize pumps activation option
+ *  v.2.0 5/24/23  Add Sync for hub variables to attributes and vice-versa
 
 **/
 
@@ -13,7 +15,7 @@ definition (
     name: "Irrigation Controller Sync",
     namespace: "Hubitat",
     author: "Burgess",
-    description: "Sync soil moisture sensor's moisture to a virtual irrigation controller device",
+    description: "Sync soil moisture sensor's moisture to a virtual irrigation controller device, and sync attributes to hub variables",
     category: "My Apps",
     iconUrl: "",
     iconX2Url: ""
@@ -117,8 +119,116 @@ def mainPage() {
             } else {
                 state.useFertilizePump = false            
             }
+        }   
+
+        // optional use start moisture variable
+        section("<b>Use Start Moisture Variable Device</b>") {
+            input (
+              name: "selectStartMoisture", 
+              type: "bool", 
+              title: "Use Start Moisture Variable?", 
+              required: true, 
+              multiple: false,
+              submitOnChange: true               
+            )
+            if (settings.selectStartMoisture) {
+                state.useStartMoisture = true
+                section("<b>Start Moisture Variable Device</b>") {
+                    input (
+                    name: "setStart", 
+                    type: "capability.actuator", 
+                    title: "Select Start Moisture Variable Device", 
+                    required: true, 
+                    multiple: false,
+                    submitOnChange: true  
+                    )
+                    if (setStart) {
+                        input (
+                            name: "trackStartSetting", 
+                            type: "bool", 
+                            title: "Track Start Moisture Setting Device", 
+                            required: true, 
+                            defaultValue: "true"
+                        )
+                    }  
+                }
+            }  else {
+                state.useStartMoisture = false            
+            }     
+        }    
+
+        // optional use min at target
+        section("<b>Use Minutes at Target Variable Device</b>") {
+            input (
+              name: "selectMinTarget", 
+              type: "bool", 
+              title: "Use Minutes at Target Variable?", 
+              required: true, 
+              multiple: false,
+              submitOnChange: true               
+            )
+            if (settings.selectMinTarget) {
+                state.useMinTarget = true
+                section("<b>Minutes at Target Variable Device</b>") {
+                    input (
+                        name: "minTarget", 
+                        type: "capability.actuator", 
+                        title: "Select Min at Target Variable Device", 
+                        required: true, 
+                        multiple: false,
+                        submitOnChange: true 
+                    )
+                    if (minTarget) {
+                    input (
+                        name: "trackMinTarget", 
+                        type: "bool", 
+                        title: "Track Min Target Variable Device", 
+                        required: true, 
+                        defaultValue: "true"
+                    )
+                  } 
+                }
+            } else {
+                state.useMinTarget = false            
+            }
+        }        
+
+        // optional use max Minutes device
+        section("<b>Use Max Minutes Variable Device</b>") {
+            input (
+              name: "selectMaxMin", 
+              type: "bool", 
+              title: "Use Max Minutes Variable?", 
+              required: true, 
+              multiple: false,
+              submitOnChange: true               
+            )
+            if (settings.selectMaxMin) {
+                state.useMaxMin = true
+                section("<b>Max Minutes Variable Device</b>") {
+                    input (
+                        name: "maxMin", 
+                        type: "capability.actuator", 
+                        title: "Select Max Minutes Variable Device", 
+                        required: true, 
+                        multiple: false,
+                        submitOnChange: true 
+                    )
+                    if (maxMin) {
+                    input (
+                        name: "trackMaxMin", 
+                        type: "bool", 
+                        title: "Track Max Minutes Variable Device", 
+                        required: true, 
+                        defaultValue: "true"
+                    )
+                  } 
+                }
+            } else {
+                state.useMaxMin = false            
+            }
         }          
-        
+       
         section("") {
             input (
                 name: "debugMode", 
@@ -148,6 +258,13 @@ def initialize() {
     subscribe(irrigationController, "contact", waterController)
     subscribe(irrigationController, "lock", fertilizeController)
 
+    if (state.useStartMoisture) subscribe(setStart, "variable", startController)
+    if (state.useMinTarget) subscribe(minTarget, "variable", minController)
+    if (state.useMaxMin) subscribe(maxMin, "variable", maxController)
+
+    if (state.useMinTarget) subscribe(irrigationController, "minutesAtTarget", minDeviceController)
+    if (state.useStartMoisture) subscribe(irrigationController, "startMoisture", startDeviceController)    
+    if (state.useMaxMin) subscribe(irrigationController, "maxMinutes", maxDeviceController)
 }
 
 def moistureSync(evt) {
@@ -181,6 +298,48 @@ def fertilizeController(evt) {
         state.fertilize = "off"
         if (state.useFertilizePump) fertilizePump.off()
     }
+}
+
+def startController(evt) {  
+    state.startSetting = evt.value
+    def ms = evt.value.toInteger()
+
+    irrigationController.setStartMoisture(ms)
+}
+
+def minController(evt) {  
+    state.minSetting = evt.value
+    def ms = evt.value.toInteger()
+
+    irrigationController.setMinutesAtTarget(ms)
+}
+
+def maxController(evt) {  
+    state.maxSetting = evt.value
+    def ms = evt.value.toInteger()
+
+    irrigationController.setMaxMinutes(ms)
+}
+
+def startDeviceController(evt) {  
+    state.startSetting = evt.value
+    def ms = evt.value.toInteger()
+
+    setStart.setVariable(ms)
+}
+
+def minDeviceController(evt) {  
+    state.minSetting = evt.value
+    def ms = evt.value.toInteger()
+
+    minTarget.setVariable(ms)
+}
+
+def maxDeviceController(evt) {  
+    state.maxSetting = evt.value
+    def ms = evt.value.toInteger()
+
+    maxMins.setVariable(ms)
 }
 
 def logDebug(txt){
