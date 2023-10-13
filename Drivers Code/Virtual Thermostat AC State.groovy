@@ -1,5 +1,5 @@
 /*
-	Virtual Thermostat Switch State 
+	Virtual Thermostat AC State 
     Version 1.0  2/10/23
 
     This Driver is for a virtual thermostat with added features:
@@ -14,7 +14,7 @@
 
 metadata {
 	definition (
-			name: "Virtual Thermostat Switch State",
+			name: "Virtual Thermostat AC State",
 			namespace: "hubitat",
 			author: "Kevin L., Mike M., Bruce R., Chris B."
 	) {
@@ -55,6 +55,7 @@ metadata {
 	}
 
 	preferences {
+        input( name: "iconPath", type: "string", description: "Address Path to icons", title: "Set Icon Path", defaultValue: "https://cburges2.github.io/ecowitt.github.io/Dashboard%20Icons/")
 		input( name: "hysteresis",type:"enum",title: "Thermostat hysteresis degrees", options:["0.1","0.25","0.5","1","2"], description:"", defaultValue: 0.5)
 		input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
 		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
@@ -243,11 +244,6 @@ def setMotion(value) {
 	sendEvent(name: "motion", value: value, descriptionText: getDescriptionText("motion set to ${value}"))
 }
 
-def setPresence(value) {
-	logDebug "setPresence(${value}) was called"
-	sendEvent(name: "presence", value: value, descriptionText: getDescriptionText("presence set to ${value}"))
-}
-
 def setOnInMin(min) {
     logDebug "setOnInMin(${min}) was called"
     def sec = (min * 60).toInteger()
@@ -303,9 +299,17 @@ def setHeatingSetpoint(setpoint) {
 	updateSetpoints(null, setpoint, null, null)
 }
 
+def setPresence(value) {
+	logDebug "setPresence(${value}) was called"
+	sendEvent(name: "presence", value: value, descriptionText: getDescriptionText("presence set to ${value}"))
+    if (value == "fan") setAcStatusIcon("ac-fan.svg")
+    if (value == "cool") setAcStatusIcon("ac-cool.svg")
+    if (value == "off")  setAcStatusIcon("ac-off.svg")
+}
+
 def setAcStatusIcon(img) {
     logDebug "setAcStatusIcon(${img}) was called"
-    def current = device.currentValue("acStatusIcon")
+    def current = device.currentValue("iconFile")
     logDebug "Image Match is ${current == img}"  
     if (current != img) {
         sendEvent(name: "acStatusIcon", value: "<img class='icon' src='${settings?.iconPath}${img}' />")

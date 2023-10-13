@@ -117,9 +117,9 @@ Integer limitIntegerRange(value,min,max) {
 
 def setDisplay() {
     logDebug "setDisplay() was called"
-    String display = "Run Seconds: "+ device.currentValue("runSeconds")+"   Run Interval: "+ device.currentValue("runIntervalHours")+"hrs   Timer State: "+device.currentValue("timerStatus")+"    State: "+device.currentValue("operatingState")
+    String display = "Run Seconds: "+ device.currentValue("runSeconds")+"<br>Run Interval: "+ device.currentValue("runIntervalHours")+"hrs<br>Timer State: "+device.currentValue("timerStatus")+"<br>State: "+device.currentValue("operatingState")
     sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
-    String display2 = "Last Run: "+ device.currentValue("lastWater")+"        "+"Next Run: "+ device.currentValue("nextWater")
+    String display2 = "Last Run: "+ device.currentValue("lastWater")+"<br>Next Run: "+ device.currentValue("nextWater")
     sendEvent(name: "display2", value: display2, descriptionText: getDescriptionText("display2 set to ${display2}"))
 }
 
@@ -161,6 +161,7 @@ def waterStop() {
     } else {
         sendEvent(name: "nextWater", value: "none", descriptionText: getDescriptionText("nextWater set to none"))
     }
+    runIn(1,setDisplay)
 }
 
 def waterStart() {   

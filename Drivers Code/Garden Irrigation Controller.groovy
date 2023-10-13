@@ -1,5 +1,5 @@
 /*
-    Irregation Controller with Fertilize
+    Garden Irregation Controller 
 
     Copyright 2023 -> C. Burgess
 
@@ -11,8 +11,8 @@
     Set Minutes at Target for how long to water once target moisture is reached
     Set Max Minutes for how long to water overall in case target is not reached
 
-    Switch turns on and contact opens when watering, to trigger an alexa routine to turn on the pump/valve or for the app to control the pump
-    Switch turns off and contact closes when watering is done, to trigger an Alexa routine to turn off the pump/valve, or for the app to control the pump
+    Switch turns on and valve opens when watering, to turn on the pump/valve or for the app to control the pump
+    Switch turns off and valve closes when watering is done, to turn off the pump/valve, or for the app to control the pump
     
     Max Minutes is set after each watering to the moisture reached, then used as Stop Moisture setting for next run. 
 
@@ -21,14 +21,14 @@
 
 metadata {
     definition (
-            name: "Irrigation Controller with Fertilize",
+            name: "Garden Irrigation Controller",
             namespace: "hubitat",
             author: "Chris B"
     ) {
         capability "Switch"
         capability "Actuator"
-        capability "Contact Sensor"  //"open", "closed"
         capability "Lock"   //"locked", "unlocked"
+        capability "Valve"  //"close", "open"
 
         // Internal Attributes for virtual device
         attribute "moisture", "ENUM"          // Soil Moisture  
@@ -47,7 +47,7 @@ metadata {
         attribute "display2", "STRING"
         attribute "display3", "STRING"
 
-        attribute "contact", "ENUM"           // Virtual contact sensor to run a pump or valve using Alexa routine (or other trigger method)
+        attribute "valve", "ENUM"           // Virtual valve to run a pump or valve using Alexa routine (or other trigger method)
         attribute "lock", "ENUM"            // Virtual lock to run a 2nd pump or valve to fertilize using Alexa routine (or other trigger method)
 
         attribute "fertilize", "ENUM"         // true/false to fertilize with watering.
@@ -117,7 +117,7 @@ def initialize() {
         state.lastRunningMode = "idle"
         updateDataValue("lastRunningMode", "idle")
         setOperatingState("idle")
-        sendEvent(name: "contact", value: "open", isStateChange: forceUpdate)
+        sendEvent(name: "valve", value: "close", isStateChange: forceUpdate)
         off()
         setDisplay()
         setUnlocked()
@@ -136,13 +136,13 @@ private eventSend(name,verb,value,unit = ""){
 def on() {
     String verb = (device.currentValue("switch") == "on") ? "is" : "was turned"
     eventSend("switch",verb,"on")
-    sendEvent(name: "contact", value: "open", isStateChange: forceUpdate)
+    sendEvent(name: "valve", value: "open", isStateChange: forceUpdate)
 }
 
 def off() {
     String verb = (device.currentValue("switch") == "off") ? "is" : "was turned"
     eventSend("switch",verb,"off")
-    sendEvent(name: "contact", value: "closed", isStateChange: forceUpdate)
+    sendEvent(name: "valve", value: "close", isStateChange: forceUpdate)
     sendEvent(name: "lock", value: "unlocked", isStateChange: forceUpdate) // turn off fertilze pump or valve
 }
 
@@ -153,7 +153,7 @@ Integer limitIntegerRange(value,min,max) {
 
 def setDisplay() {
     logDebug "setDisplay() was called"
-    String display = "Moisture: "+ device.currentValue("moisture")+"%<br> Watering at: "+ device.currentValue("startMoisture")+"%<br> Stopping at: "+device.currentValue("stopMoisture")+"%<br> State: "+device.currentValue("operatingState")+"<br> Running: "+device.currentValue("running")
+    String display = "Moisture: "+ device.currentValue("moisture")+"%<br> Watering at: "+ device.currentValue("startMoisture")+"%<br> Stopping at: "+device.currentValue("stopMoisture")+"%<br> State: "+device.currentValue("operatingState")
     sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
     String display2 =  "Moistness: "+device.currentValue("relativeMoisture")+"%<br>Mins at Trigger: "+ device.currentValue("minutesAtTrigger")+"<br> Max Minutes: "+device.currentValue("maxMinutes")+"<br> Mins at Target: "+device.currentValue("minutesAtTarget") 
     sendEvent(name: "display2", value: display2, descriptionText: getDescriptionText("display2 set to ${display2}"))
@@ -233,27 +233,26 @@ def fertilizeStop() {
 }
 
 def manageCycle(){
-    if (device.currentValue("running") == "true") {
-        def operatingState = (device.currentValue("operatingState"))
-        def startMoisture = (device.currentValue("startMoisture")).toInteger()
-        def stopMoisture = (device.currentValue("stopMoisture")).toInteger()
-        def moisture = (device.currentValue("moisture")).toInteger()
 
-        def waterOn = (moisture <= startMoisture)
-        def waterOff = (moisture >= stopMoisture)
-        
-        if ((waterOn && operatingState == "idle")) {  
-            setOperatingState("waiting")
-            def minutesAtTrigger = ((device.currentValue("minutesAtTrigger")).toInteger() * 60)
-            runIn(minutesAtTrigger, waterStart)
-        }
-        if (waterOff && operatingState == "watering"){  
-            setOperatingState("target")
-            def minutesAtTarget = ((device.currentValue("minutesAtTarget")).toInteger() * 60)
-            runIn(minutesAtTarget, waterStop)
-        }
-        runIn(1,setDisplay)
+    def operatingState = (device.currentValue("operatingState"))
+    def startMoisture = (device.currentValue("startMoisture")).toInteger()
+    def stopMoisture = (device.currentValue("stopMoisture")).toInteger()
+    def moisture = (device.currentValue("moisture")).toInteger()
+
+    def waterOn = (moisture <= startMoisture)
+    def waterOff = (moisture >= stopMoisture)
+    
+    if ((waterOn && operatingState == "idle")) {  
+        setOperatingState("waiting")
+        def minutesAtTrigger = ((device.currentValue("minutesAtTrigger")).toInteger() * 60)
+        runIn(minutesAtTrigger, waterStart)
     }
+    if (waterOff && operatingState == "watering"){  
+        setOperatingState("target")
+        def minutesAtTarget = ((device.currentValue("minutesAtTarget")).toInteger() * 60)
+        runIn(minutesAtTarget, waterStop)
+    }
+    runIn(1,setDisplay)
 }
 
 def bumpCycle() {
@@ -344,11 +343,6 @@ def setFertilizeMins(value) {
     runIn(1,setDisplay)
 }
 
-def setRunning(value) {
-    logDebug "setRunning(${value}) was called"
-    sendEvent(name: "running", value: value, isStateChange: forceUpdate,descriptionText: getDescriptionText("running set to ${value}")) 
-}
-
 def setUnlocked() {
     logDebug "seUnlocked() was called"
     sendEvent(name: "lock", value: "unlocked", isStateChange: forceUpdate) // turn off fertilze pump or valve
@@ -359,6 +353,11 @@ def setLocked() {
     sendEvent(name: "lock", value: "locked", isStateChange: forceUpdate) // turn off fertilze pump or valve
 }
 
+def setRunning(value) {
+    logDebug "setRunning(${value}) was called"
+    sendEvent(name: "running", value: value, isStateChange: forceUpdate,descriptionText: getDescriptionText("running set to ${value}")) 
+}
+
 def lock() {
     logDebug "seLocked() was called"
     sendEvent(name: "lock", value: "locked", isStateChange: forceUpdate) // turn off fertilze pump or valve
@@ -367,6 +366,16 @@ def lock() {
 def unlock() {
     logDebug "seUnlocked() was called"
     sendEvent(name: "lock", value: "unlocked", isStateChange: forceUpdate) // turn off fertilze pump or valve
+}
+
+def close() {
+    logDebug "close() was called"
+    sendEvent(name: "valve", value: "close", isStateChange: forceUpdate) // turn off fertilze pump or valve
+}
+
+def open() {
+    logDebug "open() was called"
+    sendEvent(name: "valve", value: "open", isStateChange: forceUpdate) // turn off fertilze pump or valve
 }
 
 private logDebug(msg) {

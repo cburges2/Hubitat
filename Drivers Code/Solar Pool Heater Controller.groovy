@@ -26,6 +26,8 @@ metadata {
         attribute "display2", "STRING"
         attribute "displayAll", "STRING"
         attribute "illuminance", "ENUM"
+        attribute "poolTempMax", "ENUM"
+        attribute "poolTempMin", "ENUM"
         attribute "heaterTemp", "NUMBER"
         attribute "poolTemp", "NUMBER"
         attribute "operatingState","ENUM"
@@ -46,6 +48,7 @@ metadata {
         command "setIlluminance", ["ENUM"]
         command "setHeaterTemp", ["NUMBER"]
         command "setPoolTemp", ["NUMBER"]
+        command "clearPoolMinMax"
         command "setOnTemperature", ["NUMBER"]
         command "setMaxPoolTemp", ["NUMBER"]
         command "setOnIlluminance", ["ENUM"]
@@ -57,6 +60,7 @@ metadata {
 	preferences {
 		input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
 		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
+        input( name: "heaterPoolDiff", type: "number", description: "Temperature difference between heater and pool for on by illumination", title: "Set Heater/Pool Difference", defaultValue: 10)
         input( name: "cold", type: "number", description: "Temperature you consider to be cold water", title: "Set Water Comfort Cold", defaultValue: 65)
         input( name: "chilly", type: "number", description: "Temperature you consider to be chilly water", title: "Set Water Comfort Chilly", defaultValue: 69)
         input( name: "warm", type: "number", description: "Temperature you consider to be warm water", title: "Set Water Comfort Warm", defaultValue: 74)
@@ -135,12 +139,17 @@ def manageCycle() {
     def poolTemp = device.currentValue("poolTemp").toBigDecimal()
     def onIllum = device.currentValue("onIlluminance").toInteger()
     def operatingState = device.currentValue("operatingState")
+    def poolDiff = settings?.heaterPoolDiff.toBigDecimal
 
     // Checks
-    def turnOnIllum = (illum >= onIllum) && (temp >= (poolTemp+10.0))
+    def poolDemand = (poolTemp < offTemp)
+    def turnOnIllum = (illum >= onIllum) && (temp >= (poolTemp + poolDiff)) && poolDemand
     def turnOffIllum = (illum < onIllum)
-    def turnOnTemp = (temp >= onTemp ) && (poolTemp < offTemp) 
+    def turnOnTemp = (temp >= onTemp) && (poolDemand) 
     def turnOffTemp = (temp < onTemp) || (poolTemp >= offTemp) || (temp < poolTemp)
+
+    if ((illum >= onIllum) && (temp < (poolTemp + poolDiff)) logDebug "Heater too cool for on by illumination"
+    if ((!poolDemand))  logDebug "Pool is at setpoint.  Heater will not run"
 
     if (turnOnIllum && !turnOnTemp) {
         setPresence("Solar")
@@ -180,8 +189,8 @@ def logsOff(){
 def setDisplay() {
 	logDebug "setDisplay() was called"
     String display = "Pool Temp: "+(device.currentValue("poolTemp"))+"°<br>Heat Temp: "+(device.currentValue("heaterTemp"))+"°<br>Solar: "+(device.currentValue("illuminance"))+" lux<br>State: "+(device.currentValue("operatingState"))
-    String display2 = "Max Temp: "+(device.currentValue("maxPoolTemp"))+"°<br>On Temp: "+(device.currentValue("onTemperature"))+"°<br>On Solar: "+(device.currentValue("onIlluminance"))
-    String displayAll = "Pool Temperature: "+(device.currentValue("poolTemp"))+"°<br><br>Heater Temperature: "+(device.currentValue("heaterTemp"))+"°<br>On by Temperature: "+(device.currentValue("onTemperature"))+"°<br>Max Pool Temp: "+(device.currentValue("maxPoolTemp"))+"°<br><br>Operating State: "+(device.currentValue("operatingState"))+"<br>Water Comfort: "+(device.currentValue("lock"))+"<br><br>Solar Illuminance: "+(device.currentValue("illuminance"))+" lux<br>On by Illumination: "+(device.currentValue("onIlluminance"))+ " lux"
+    String display2 = "Max Temp: "+(device.currentValue("poolTempMax"))+"°<br>On Temp: "+(device.currentValue("onTemperature"))+"°<br>On Solar: "+(device.currentValue("onIlluminance"))
+    String displayAll = "Pool Temperature: "+(device.currentValue("poolTemp"))+"°<br>Pool Temp High: "+(device.currentValue("poolTempMax"))+"°<br>Pool Temp Low: "+(device.currentValue("poolTempMin"))+"°<br><br>Heater Temperature: "+(device.currentValue("heaterTemp"))+"°<br>On by Temperature: "+(device.currentValue("onTemperature"))+"°<br>Max Pool Temp: "+(device.currentValue("maxPoolTemp"))+"°<br><br>Operating State: "+(device.currentValue("operatingState"))+"<br>Water Comfort: "+(device.currentValue("lock"))+"<br><br>Solar Illuminance: "+(device.currentValue("illuminance"))+" lux<br>On by Illumination: "+(device.currentValue("onIlluminance"))+ " lux"
     sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
     sendEvent(name: "display2", value: display2, descriptionText: getDescriptionText("display2 set to ${display2}"))
     sendEvent(name: "displayAll", value: displayAll, descriptionText: getDescriptionText("displayA;; set to ${display2}"))
@@ -198,6 +207,8 @@ def setPoolTemp(setpoint) {
     def temp = setpoint.toBigDecimal()
 	logDebug "setPoolTemp(${setpoint}) was called"
     sendEvent(name: "poolTemp", value: setpoint, descriptionText: getDescriptionText("poolTemp set to ${setpoint}"))
+    if (device.currentValue("poolTempMax").toBigDecimal() < temp) sendEvent(name: "poolTempMax", value: setpoint, descriptionText: getDescriptionText("poolTempMax set to ${setpoint}"))
+    if (device.currentValue("poolTempMin").toBigDecimal() > temp) sendEvent(name: "poolTempMin", value: setpoint, descriptionText: getDescriptionText("poolTempMin set to ${setpoint}"))
     if (temp < settings?.cold.toBigDecimal()) {
         setTempIcon("pool-freezing.svg")
         sendEvent(name: "lock", value: "freezing", descriptionText: getDescriptionText("lock set to freezing"))
@@ -221,6 +232,12 @@ def setPoolTemp(setpoint) {
     runIn(1, manageCycle) 
 }
 
+def clearPoolMinMax() {
+    def setpoint = device.currentValue("poolTemp")
+    sendEvent(name: "poolTempMax", value: setpoint, descriptionText: getDescriptionText("poolTempMax reset to ${setpoint}"))
+    sendEvent(name: "poolTempMin", value: setpoint, descriptionText: getDescriptionText("poolTempMin reset to ${setpoint}"))     
+}
+
 def setIlluminance(setpoint) {
 	logDebug "setIlluminance(${setpoint}) was called"
     sendEvent(name: "illuminance", value: setpoint, descriptionText: getDescriptionText("illuminance set to ${setpoint}"))
@@ -235,7 +252,7 @@ def setOnTemperature(setpoint) {
 
 def setMaxPoolTemp(setpoint) {    
 	logDebug "setMaxPoolTemp(${setpoint}) was called"
-    sendEvent(name: "maxPoolTemp", value: setpoint, descriptionText: getDescriptionText("maxPoolTemp set to ${setpoint}"))
+    sendEvent(name: "maxPoolTemp", value: setpoint, descriptionText: getDescriptionText("mexPoolTemp set to ${setpoint}"))
     runIn(1, manageCycle)
 }
 

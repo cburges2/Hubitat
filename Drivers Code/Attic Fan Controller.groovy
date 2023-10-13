@@ -36,10 +36,10 @@ metadata {
         attribute "atticHumidSetpoint", "ENUM"      // fan will not run for humidity difference if attic humidity is greater than this setpoint (will still run for temp)
         attribute "fanSpeed", "ENUM"   			    // low, medium, high - manually set or auto set fan speed, based on pref setting
         attribute "presence", "ENUM"                // venting for humidity, temp, both, or none
-		attribute "maxTempHumidity","ENUM"          // max outside humidity to allow for temperature venting (set in preferences)
 		attribute "overrideTemp","NUMBER"			// attic temp where fan will run regardless of outside humidtiy and max temp humidity setting (set in prefrences)
 		attribute "icon", "STRING"                  // status icon attribute to be use on a dashboard tile
 		attribute "iconText", "STRING"
+		attribute "iconFile", "STRING"
 
 		// Commands needed to change internal attributes of virtual device.
         command "setOperatingState", [[name:"operatingState",type:"ENUM", description:"Set Operating State", constraints:["venting","idle"]]]
@@ -60,7 +60,6 @@ metadata {
 	preferences {
 		input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
 		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
-		input( name: "maxTempHumidity", type:"enum", title: "Max Outside Humidity to run for Temperature", defaultValue:"55", options:[30:"30%",35:"35%",40:"40%",45:"45%",50:"50%",55:"55%",60:"60%",65:"65%",70:"70%",75:"75%"])
 		input( name: "overrideTemp", type:"number", title: "Attic Temp that overrides Max Outside Humidity", defaultValue:"95")
 		input( name: "autoFan", type:"bool", title: "Enable auto fan speed", defaultValue:true)
 		input( name: "fanMediumThreshold", type:"enum", title: "Fan Medium Speed Difference", defaultValue:"3", options:[1:"1",2:"2",3:"3",4:"4",5:"5"])
@@ -136,12 +135,12 @@ Integer limitIntegerRange(value,min,max) {
 def setDisplay() {
 	logDebug "setDisplay() was called"
     String display = "Attic: "+(device.currentValue("atticHumidity"))+"% "+(device.currentValue("atticTemp"))+"°<br>  Out: "+(device.currentValue("outsideHumidity"))+"% "+(device.currentValue("outsideTemp"))+"°<br> "+(device.currentValue("operatingState"))+"<br>"+(device.currentValue("presence")) 
-    String display2 = "%° Setpoint: "+settings?.maxTempHumidity+"%<br>°% Setpoint: "+settings?.overrideTemp+"°<br>% Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"% <br> ° Setpoint: "+(device.currentValue("atticTempSetpoint"))+"°" 
+    String display2 = "°% Setpoint: "+settings?.overrideTemp+"°<br>% Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"% <br> ° Setpoint: "+(device.currentValue("atticTempSetpoint"))+"°" 
     String iconText = (device.currentValue("atticHumidity"))+"% "+(device.currentValue("atticTemp"))+"°"
 	def autoFan = "auto"
 	if (settings?.autoFan == false) autoFan ="manual"	
 	String displayAll = "Attic Humidity: "+(device.currentValue("atticHumidity"))+"%<br>Outside Humidity: "+(device.currentValue("outsideHumidity"))+"%<br>Humidity Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"%<br><br>Attic Temperature: "+(device.currentValue("atticTemp"))+"°<br>Outside Temperature:   "+(device.currentValue("outsideTemp"))+"°<br>Temperature Setpoint: "+(device.currentValue("atticTempSetpoint"))+"°<br><br>Operating State:  "+(device.currentValue("operatingState"))+"<br>Venting:       "+(device.currentValue("presence"))+"<br><br>"+
-	    "Max Humidity for Temp: "+settings?.maxTempHumidity+"%<br>Temp Override Humidity: "+settings?.overrideTemp+"°<br><br>Fan Setting: "+autoFan+"<br>Fan Speed: "+device.currentValue("fanSpeed")+"<br>"+
+	    "Temp Override Humidity: "+settings?.overrideTemp+"°<br><br>Fan Setting: "+autoFan+"<br>Fan Speed: "+device.currentValue("fanSpeed")+"<br>"+
 		"<br>Medium Speed Difference: "+settings?.fanMediumThreshold+"°%<br>High Speed Difference: "+settings?.fanHighThreshold+"°%"
 	String display3 = "Fan: "+autoFan+"<br>Speed: "+device.currentValue("fanSpeed")+"<br>"
 	sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
@@ -163,8 +162,6 @@ def logsOff(){
 }
 
 def setPrefAttributes() {
-	def mth = settings?.maxTempHumidity.toInteger()
-	sendEvent(name: "maxTempHumidity", value: mth, descriptionText: getDescriptionText("maxTempHumidity set to ${mth}"))
 	def ot = settings?.overrideTemp.toBigDecimal()
 	sendEvent(name: "overrideTemp", value: ot, descriptionText: getDescriptionText("overrideTemp set to ${ot}"))
 }
@@ -181,11 +178,10 @@ def manageCycle() {
 	def operatingState = device.currentValue("operatingState")
 	def presence = device.currentValue("presence")
 	def fanMode = device.currentValue("fanMode")
-	def maxHumid = settings?.maxTempHumidity.toInteger()
 	def maxTemp = settings?.overrideTemp.toBigDecimal()
     
 	// temp and humidity checks
-	def humidTemp = (outsideHumidity <= maxHumid) || (atticTemp > maxTemp)       						// check humidity restrictions before running for temp
+	def humidTemp = (atticHumidity <= atticHumidSetpoint) || (atticTemp > maxTemp)       				// check humidity restrictions before running for temp
 	def atticHumidityOn = (atticHumidity > outsideHumidity) && (atticHumidity > atticHumidSetpoint)		// checks if vent for temp within outside humidity setpoint
 	def runTemp = (atticHumidity < outsideHumidity) || (atticHumidity < atticHumidSetpoint)	            // checks humidity difference and humidTemp setpoint before venting for temperature difference
 	def tempOn = (atticTemp > outsideTemp) && (atticTemp > atticTempSetpoint)  // checks to vent for temp difference only if attic temp greater than setpoint. 
@@ -283,7 +279,7 @@ def manageCycle() {
 	      	  logDebug("difference is less than zero or null")
 	   		}
 
-	    // bump up speed if humid or temp is rising while at low or medium speed
+	    // bump up speed if humidity or temp is rising while at low or medium speed (to get ahead of it)
 	    def speed = device.currentValue("fanSpeed")
 	    if ((state.tempTrend == "rising" && onTemp) || (state.humidTrend == "rising" && onHumid)) {
 	    	if (speed == "low") setFanSpeed("medium")
@@ -370,8 +366,12 @@ def setFanMode(mode) {
 }
 
 def setIcon(img) {
+	def current = device.currentValue("iconFile")
     logDebug "setIcon(${img}) was called"
-    sendEvent(name: "icon", value: "<img class='icon' src='${settings?.iconPath}${img}' />")
+	if (current != img) {
+		sendEvent(name: "icon", value: "<img class='icon' src='${settings?.iconPath}${img}' />")
+		sendEvent(name: "iconFile", value: img)
+	}
 }
 
 private logDebug(msg) {
