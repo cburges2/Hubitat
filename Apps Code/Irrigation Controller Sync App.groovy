@@ -294,7 +294,7 @@ def fertilizeController(evt) {
     if (lock == "locked") {
         state.fertilize = "on"
         if (state.useFertilizePump) fertilizePump.on()
-    } else {
+    } else if (lock == "unlocked") {
         state.fertilize = "off"
         if (state.useFertilizePump) fertilizePump.off()
     }
