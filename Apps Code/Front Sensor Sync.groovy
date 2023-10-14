@@ -1,11 +1,12 @@
 /**
- *  ****************  Front Sensor Data Sync  ****************
+ *  ****************  Front Sensor Sync  ****************
  *
  *  Usage:
  *  This was designed to sync a virtual attribute device with motion sensor events
  *  
  *  Version 9/26/23  - Initial release
- *  Version 10/11/23 - check Timeout before setting Inactive
+ *  Version 10/11/23 - Save state and check Timeout before setting to Inactive
+ *  Versin 10/14/23 - Removed Inactive state
 **/
 
 definition (
@@ -102,8 +103,8 @@ def mainPage() {
 }
 
 def installed() {
-    state.kitchenMotionStatus = "Inactive"
-    state.livingRoomMotionStatus = "Inactive"
+    state.kitchenMotionStatus = "Timeout"
+    state.livingRoomMotionStatus = "Timeout"
     initialize()
 }
 
@@ -136,14 +137,11 @@ def livingRoomSync(evt) {
     logDebug("Living Room Motion Event = $state.livingRoomMotion")
     def motion = evt.value
     
-    if (motion == "active") {
+    if (motion == "active" && state?.livingRoomMotionStatus == "Timeout") {
         attributeController.setLivingRoomMotionStatus("Active")  
         state.livingRoomMotionStatus = "Active"
     }
-    if (motion == "inactive" && state?.livingRoomMotion != "Timeout") {
-        attributeController.setLivingRoomMotionStatus("Inactive")  
-        state.livingRoomMotionStatus = "Inactive"
-    }
+    
     setFrontStatus()
     
 }
@@ -152,18 +150,12 @@ def kitchenSync(evt) {
 
     logDebug("Kithen Motion Event = $state.kitchenMotion")
     def motion = evt.value
-    
-    if (motion == "active") { 
+
+    if (motion == "active" && state?.kitchenMotionStatus == "Timeout") { 
         attributeController.setKitchenMotionStatus("Active") 
-        attributeController.setKitchenActivityStatus("Active") 
+        attributeController.setKitchenActivityStatus("Active")  
         state.kitchenMotionStatus = "Active"
     }
-    if (motion == "inactive" && state?.kitchenMotion != "Timeout") {
-        attributeController.setKitchenMotionStatus("Inactive") 
-        attributeController.setKitchenActivityStatus("Inactive")  
-        state.kitchenMotionStatus = "Inactive"
-    }
-    
     setFrontStatus()
 }
 
@@ -173,7 +165,6 @@ def setFrontStatus() {
     def kitchen = state?.kitchenMotionStatus
     
     if ((kitchen == "Active" || livingRoom == "Active") && front != "Active") attributeController.setFrontMotionStatus("Active")
-    if ((kitchen == "Inactive" && livingRoom == "Inactive") && front != "Inactive") attributeController.setFrontMotionStatus("Inactive")
     if ((kitchen == "Timeout" && livingRoom == "Timeout") && front != "Timeout") attributeController.setFrontMotionStatus("Timeout")
 }
 
