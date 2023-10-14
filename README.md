@@ -63,5 +63,18 @@ Driver: Controls the timer for the pump.
 Install: Install the driver code and create a Timer Irrigation Controller device. If using a switch, install the Irrigation Sync app. 
 Rules: If time is active, water for set seconds every set period of time.  Cycle will continue until timer is stopped by changing the driver attribute to off. 
 
+Virtual T6 Thermostat Controller APP
+
+A driver and an app combo.  THe driver is the Honeywell T6 Pro Virtual Thermostat driver. This is a companion app and driver to go with the Advanced Honeywell T6 Pro Thermostat driver. 
+The T6 pro is a great thermostat, but the hysteresis is large and cannot be set, producting large temperature swings.  This app/driver solves that issue with a more percise hysteresis setting. 
+The other problem is the temperature sensor.  It is C converted to F and rounded to a whole degree. This means it can never really display 70 degrees F, for example.  The app uses a remote temp sensor with more accuracy. 
+All setting are still done through the physical thermostat, in software or from the wall unit, and they are synced to the virtual thermostat.  Heat/Cool Setpoints, etc.  
+The virtual thermostat takes advantage of the sensor calibration function of the T6 pro.  By changing the calibration, the thermostat can be forced to turn on or off. 
+Additional Features:
+A stop hysteresis that can be set different than start hysteresis - good for hot water heat that will continue to push up the temperature after heating stops
+Operational Brightness and Idle Brightness set in the virtual thermostat, are separate settings for display brightness when heating/cooling and idle. To make display brighter when operational. 
+The app allows for up to two other devices to be turned on/off with heat/cool and fan/idle.  Such as an electic fireplace on when heating. 
+The virtual thermostat driver also sets a contact attribute to open when heating, and it sets a motion attribute to active when cooling. (for linking Alexa devices via contact or motion attribute triggers when virtual thermostat is shared with Alexa)
+There is an option in the app to sync the humidity display on the T6 thermostat to a remote humidity sensor by using the sensorCal feature.  
 
 
