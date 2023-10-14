@@ -70,9 +70,7 @@ The T6 pro is a great thermostat, but the hysteresis is large and cannot be set,
 The other problem is the temperature sensor.  It is C converted to F and rounded to a whole degree. This means it can never really display 70 degrees F, for example.  The app uses a remote temp sensor with more accuracy. 
 All setting are still done through the physical thermostat, in software or from the wall unit, and they are synced to the virtual thermostat.  Heat/Cool Setpoints, etc.  
 The virtual thermostat takes advantage of the sensor calibration function of the T6 pro.  By changing the calibration, the thermostat can be forced to turn on or off.
-
 Additional Features:
-
 A stop hysteresis that can be set different than start hysteresis - good for hot water heat that will continue to push up the temperature after heating stops
 Operational Brightness and Idle Brightness set in the virtual thermostat, are separate settings for display brightness when heating/cooling and idle. To make display brighter when operational. 
 The app allows for up to two other devices to be turned on/off with heat/cool and fan/idle.  Such as an electic fireplace on when heating. 
