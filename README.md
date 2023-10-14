@@ -75,6 +75,6 @@ A stop hysteresis that can be set different than start hysteresis - good for hot
 Operational Brightness and Idle Brightness set in the virtual thermostat, are separate settings for display brightness when heating/cooling and idle. To make display brighter when operational. 
 The app allows for up to two other devices to be turned on/off with heat/cool and fan/idle.  Such as an electic fireplace on when heating. 
 The virtual thermostat driver also sets a contact attribute to open when heating, and it sets a motion attribute to active when cooling. (for linking Alexa devices via contact or motion attribute triggers when virtual thermostat is shared with Alexa)
-There is an option in the app to sync the humidity display on the T6 thermostat to a remote humidity sensor by using the sensorCal feature.  
+There is an option in the app to sync the humidity display on the T6 thermostat to a remote humidity sensor by using the humidityCal feature.  
 
 
