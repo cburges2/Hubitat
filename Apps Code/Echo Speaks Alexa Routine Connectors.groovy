@@ -23,6 +23,10 @@ preferences {
 def mainPage() {
     dynamicPage(name: "mainPage") {
 
+        section("App Name") {
+            label title: "", required: false
+        }  
+        
         section("<b>Echo Device for Commands</b>") {
 
             input (

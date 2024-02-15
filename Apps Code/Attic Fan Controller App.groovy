@@ -2,25 +2,21 @@
  *  ****************  Attic Fan Controller App ****************
  *
  *  Usage:
- *  Uses companion driver "Attic Fan Controller"
- *  This was designed to update a virtual attic fan controller's humidity and temp from external sensors
+ *  This was designed to update a virtual attic controller's humidity and temp from external sensors
  *  The temp and humidity sensors are Outside and in the Attic.
- *  The driver does the cycle logic, and the app controls a fan speed controller or a switch device
+ *  Uses companion driver Attic Fan Controller, syncs the data, and controls a fan device switch
  *   
- *  Turns on/off a switch, and/or sets the fan speed for the fan when the driver's operatingState changes 
+ *  Turns on/off a switch for the fan when the driver's operatingState changes 
  * 
  *    
- * v. 1.0 4/3/23   - Initial code
- * v. 1.2 4/7/23   - updated to use a speed controller device
- * v. 1.5 4/14/23  - added choice for switch or speed controller at setup
-
+ * v. 1.0 4/3/23 - Itital code
 **/
 
 definition (
     name: "Attic Fan Controller App",
     namespace: "Hubitat",
     author: "Burgess",
-    description: "Sync Attic and Outside Humidity and Temp to an Attic Fan Controller Device, and control the attic fan",
+    description: "Sync Attic and Outside Humidity and Temp to Attic Fan Controller Device",
     category: "My Apps",
     iconUrl: "",
     iconX2Url: ""
@@ -139,39 +135,28 @@ def mainPage() {
                 )
             }             
         }
-
-        section("<b>Speed Controller or Switch</b>") {
+        
+        section("<b>Attic Fan Switch Device</b>") {
             input (
-              name: "selectController", 
-              type: "bool", 
-              title: "Use fan Speed Controller to operate the fan", 
-              required: true, 
-              multiple: false,
-              submitOnChange: true               
+                name: "fan", 
+                type: "capability.switch", 
+                title: "Select Attic Fan Switch Device", 
+                required: true, 
+                multiple: false
             )
-            if (settings.selectController) {
-                state.useSpeed = true
-                section("<b>Attic Fan Speed Controller Device</b>") {
-                    input (
-                        name: "fan", 
-                        type: "capability.fanControl", 
-                        title: "Select Attic Fan Speed Controller Device", 
-                        required: true, 
-                        multiple: false
-                    )
-                }
-            } else {
-                state.useSpeed = false
-                input (
-                    name: "fanSwitch", 
-                    type: "capability.switch", 
-                    title: "Select Attic Fan Switch Device", 
-                    required: true, 
-                    multiple: false
-                )                
-            }
         }
-           
+
+        section("<b>Log To Google Device</b>") {
+            input (
+                name: "googleLogs", 
+                type: "capability.actuator",
+                title: "Select Log to Google Device", 
+                required: true, 
+                multiple: false,
+                submitOnChange: true
+            )        
+        }
+
         section("") {
             input (
                 name: "debugMode", 
@@ -191,21 +176,49 @@ def installed() {
     state.atticTemp = 75.0
     state.operatingState = "idle"
     state.fanSwitch = "off"
-    state.fanSpeed = "off"
     initialize()
 }
 
 def updated() {
     initialize()
+    startLogTimer()
+    if (settings?.debugMode) runIn(3600, logDebugOff)   // one hour
 }
 
 def initialize() {
+
     subscribe(outsideHumidity, "humidity", setOutsideHumidity)
     subscribe(atticHumidity, "humidity", setAtticHumidity)
     subscribe(outsideTemperature, "temperature", setOutsideTemp)
     subscribe(atticTemperature, "temperature", setAtticTemp)    
-    subscribe(atticFanController, "operatingState", setOperatingState)
-    subscribe(atticFanController, "fanSpeed", setSpeed)
+    subscribe(atticFanController, "operatingState", setSwitch)
+
+    startLogTimer()
+}
+
+def startLogTimer() {
+    runIn(60,logToGoogle)
+}
+
+def logToGoogle() {
+
+    startLogTimer()
+    def atticTemp = atticFanController.currentValue("atticTemp")
+    def atticHumidity = atticFanController.currentValue("atticHumidity")
+    def outsideTemp = atticFanController.currentValue("outsideTemp")
+    def outsideHumidity = atticFanController.currentValue("outsideHumidity")
+    def atticHumidSetpoint = atticFanController.currentValue("atticHumidSetpoint")
+    def atticTempSetpoint = atticFanController.currentValue("atticTempSetpoint")
+    def overrideTemp = atticFanController.currentValue("overrideTemp")
+    def presence = atticFanController.currentValue("presence")
+
+    def onTemp = 0.0
+    def onHumid = 0.0
+    if (presence == "humidity" || presence == "both") onHumid = atticHumidSetpoint
+    if (presence == "temperature" || presence == "both") onHumid = atticTempSetpoint
+
+    def logParams = "Attic Temp="+atticTemp+"&Attic Humid="+atticHumidity+"&Out Temp="+outsideTemp+"&Out Humid="+outsideHumidity+"&On Temp="+onTemp+"&On Humid="+onHumid+"&Humid Setpoint="+atticHumidSetpoint+"&Temp Setpoint="+atticTempSetpoint+"&Override Temp="+overrideTemp
+    googleLogs.sendLog("Attic", logParams) 
 }
 
 def setOutsideHumidity(evt) {
@@ -214,7 +227,7 @@ def setOutsideHumidity(evt) {
     logDebug("Outside Humidity Event = $state.outsideHumidity")
     def lvl = evt.value.toInteger()
 
-    atticFanController.setOutsideHumidity(lvl)     
+    atticFanController.setOutsideHumidity(lvl)  
 }
 
 def setAtticHumidity(evt) {
@@ -224,14 +237,16 @@ def setAtticHumidity(evt) {
     def lvl = evt.value.toInteger()
 
     atticFanController.setAtticHumidity(lvl) 
+    
 }
 
 def setOutsideTemp(evt) {
     state.outsideTemp = evt.value.toBigDecimal()
-    logDebug("Outside Temp Event = $state.outsideTemp")
+    logDebug("Outside Temp Event = $state.outsdieTemp")
     def lvl = evt.value.toBigDecimal()
 
     atticFanController.setOutsideTemp(lvl) 
+
 }
 
 def setAtticTemp(evt) {
@@ -240,48 +255,41 @@ def setAtticTemp(evt) {
     def lvl = evt.value.toBigDecimal()
 
     atticFanController.setAtticTemp(lvl) 
+
 }
 
-def setOperatingState(evt) {
+def setSwitch(evt) {
     state.operatingState = evt.value  
     logDebug("Attic Operating State Event = $state.operatingState")
     def state = evt.value
 
     if (state == "venting") {
         fanOn()
-        runIn(2, fanOn)
     }
     if (state == "idle") {
         fanOff()
-        runIn(2, fanOff)
     }
 }
 
 def fanOff() {
-    if (state.useSpeed) {
-        fan.off()
-    } else fanSwitch.off()
-    state.fanSwitch = "off"  
+    state.fanSwitch = "off"
+    fan.off()
 }
 
 def fanOn() {
-    if (state.useSpeed) {
-        fan.setSpeed(state.fanSpeed)
-    } else fanSwitch.on()
     state.fanSwitch = "on"
+    fan.on()
 }
 
-def setSpeed(evt) {
-    state.fanSpeed = evt.value
-    if (state.fanSwitch == "on" && state.useSpeed) {
-        fan.setSpeed(state.fanSpeed)                   // update current speed if using
-    } 
-}
-
-def logDebug(txt) {
+def logDebug(txt){
     try {
         if (settings.debugMode) { log.debug("${app.label} - ${txt}") }
     } catch(ex) {
         log.error("bad debug message")
     }
+}
+
+def logDebugOff() {
+    logDebug("Turning off debugMode")
+    app.updateSetting("debugMode",[value:"false",type:"bool"])
 }

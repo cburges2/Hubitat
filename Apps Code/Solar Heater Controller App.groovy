@@ -149,6 +149,8 @@ def installed() {
 }
 
 def updated() {
+
+    if (settings?.debugMode) runIn(3600, logDebugOff)   // one hour
     initialize()
 }
 
@@ -187,7 +189,7 @@ def setPoolTemp(evt) {
 }
 
 def setOperatingState(evt) {
-    state.operatingState = evt.value  
+    state.operatingState = evt.value 
     logDebug("Heater Operating State Event = $state.operatingState")
     def state = evt.value
 
@@ -215,4 +217,9 @@ def logDebug(txt) {
     } catch(ex) {
         log.error("bad debug message")
     }
+}
+
+def logDebugOff() {
+    logDebug("Turning off debugMode")
+    app.updateSetting("debugMode",[value:"false",type:"bool"])
 }

@@ -5,7 +5,7 @@
  *  This was designed to control a pump for a virtual timer irrigation controller device
  *    
  *  v.1.0 5/2/23  Initial code
- *  
+ *  v.2.0 5/26/23 Added Run Seconds Variable Connector sync to attribute option
 
 **/
 
@@ -13,7 +13,7 @@ definition (
     name: "Timer Irrigation Controller App",
     namespace: "Hubitat",
     author: "cburgess",
-    description: "Active water pump from a virtual timer irrigation controller device",
+    description: "Activate water pump from a virtual timer irrigation controller device",
     category: "My Apps",
     iconUrl: "",
     iconX2Url: ""
@@ -27,6 +27,10 @@ def mainPage() {
 
     dynamicPage(name: "mainPage") {
 
+        section("App Name") {
+            label title: "", required: false
+        }  
+        
         section("<b>Virtual Irrigation Controller</b>") {
 
             input (
@@ -36,16 +40,7 @@ def mainPage() {
               required: true, 
               multiple: false,
               submitOnChange: true  
-            )
-            if (mirrigationController) {
-                input (
-                    name: "trackController", 
-                    type: "bool", 
-                    title: "Track Controller changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            }      
+            ) 
         }
 
         section("<b>Use Water Pump Switch Device</b>") {
@@ -71,8 +66,32 @@ def mainPage() {
             } else {
                 state.useWaterPump = false            
             }
-        }               
-        
+        }      
+
+        section("<b>Setting Variable Device</b>") {
+
+            input (
+              name: "settingsInput", 
+              type: "capability.actuator", 
+              title: "Select Settings Varialbe Device", 
+              required: true, 
+              multiple: false,
+              submitOnChange: true  
+            ) 
+        }        
+
+        section("<b>Settings Buttons Device</b>") {
+
+            input (
+              name: "settingsButtons", 
+              type: "capability.pushableButton", 
+              title: "Select Settings Button Device", 
+              required: true, 
+              multiple: false,
+              submitOnChange: true  
+            ) 
+        }          
+
         section("") {
             input (
                 name: "debugMode", 
@@ -91,12 +110,17 @@ def installed() {
 }
 
 def updated() {
+
+    if (settings?.debugMode) runIn(3600, logDebugOff)   // one hour
+    unsubscribe(runSecondsController)
+
     initialize()
 }
 
 def initialize() {
 
     subscribe(irrigationController, "contact", waterController)
+    subscribe(settingsButtons, "pushed", settingsController)    
 
 }
 
@@ -112,10 +136,30 @@ def waterController(evt) {
     }
 }
 
+def settingsController(evt) {  
+    def pushed = evt.value.toInteger()
+    def value = settingsInput.currentValue("variable").toInteger()
+
+    // Run Seconds
+    if (pushed == 1) {irrigationController.setRunSeconds(value)}
+    // Run Interval Hours
+    if (pushed == 2) {irrigationController.setRunIntervalHours(value)}
+    // start timer
+    if (pushed == 3) {irrigationController.startTimer()}
+    // stop timer
+    if (pushed == 4) {irrigationController.stopTimer()}
+
+}
+
 def logDebug(txt){
     try {
         if (settings.debugMode) { log.debug("${app.label} - ${txt}") }
     } catch(ex) {
         log.error("bad debug message")
     }
+}
+
+def logDebugOff() {
+    logDebug("Turning off debugMode")
+    app.updateSetting("debugMode",[value:"false",type:"bool"])
 }
