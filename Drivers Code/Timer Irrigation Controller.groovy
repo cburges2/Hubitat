@@ -117,9 +117,9 @@ Integer limitIntegerRange(value,min,max) {
 
 def setDisplay() {
     logDebug "setDisplay() was called"
-    String display = "Run Seconds: "+ device.currentValue("runSeconds")+"<br>Run Interval: "+ device.currentValue("runIntervalHours")+"hrs<br>Timer State: "+device.currentValue("timerStatus")+"<br>State: "+device.currentValue("operatingState")
+    String display = "Water Seconds: "+ device.currentValue("runSeconds")+"<br>Run Interval: "+ device.currentValue("runIntervalHours")+"hrs<br>State: "+device.currentValue("operatingState")
     sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
-    String display2 = "Last Run: "+ device.currentValue("lastWater")+"<br>Next Run: "+ device.currentValue("nextWater")
+    String display2 = "Last Run: "+ device.currentValue("lastWater")+"<br>Next Run: "+ device.currentValue("nextWater")+"<br>Timer: "+device.currentValue("timerStatus")+"<br>"
     sendEvent(name: "display2", value: display2, descriptionText: getDescriptionText("display2 set to ${display2}"))
 }
 
@@ -251,6 +251,11 @@ def setNextWaterTime() {
     }    
     def next = nextHour+":"+nextMinute+" "+nextMeridian       // gets time in 12h format
     sendEvent(name: "nextWater", value: next, descriptionText: getDescriptionText("nextWater set to ${next}"))       
+}
+
+def logsOff(){
+	log.warn "debug logging disabled..."
+	device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
 
 private logDebug(msg) {

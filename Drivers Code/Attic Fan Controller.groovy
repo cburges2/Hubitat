@@ -374,6 +374,11 @@ def setIcon(img) {
 	}
 }
 
+def logsOff(){
+	log.warn "debug logging disabled..."
+	device.updateSetting("logEnable",[value:"false",type:"bool"])
+}
+
 private logDebug(msg) {
 	if (settings?.logEnable) log.debug "${msg}"
 }

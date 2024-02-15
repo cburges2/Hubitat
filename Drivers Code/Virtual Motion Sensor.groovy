@@ -78,6 +78,11 @@ private logDebug(msg) {
 	if (settings?.logEnable) log.debug "${msg}"
 }
 
+def logsOff(){
+	log.warn "debug logging disabled..."
+	device.updateSetting("logEnable",[value:"false",type:"bool"])
+}
+
 private getDescriptionText(msg) {
 	def descriptionText = "${device.displayName} ${msg}"
 	if (settings?.txtEnable) log.info "${descriptionText}"

@@ -2,7 +2,9 @@
     Virtual Humidistat
 
     Copyright 2023 -> C. Burgess
-
+    10/3/23 - New Version - volume is setpoint and level is water level
+    10/6/23 - Water level presence description is set when setting level for water level
+    10/8/23 - Water Level is calculated in the driver based on tank size and consumption
 */
 
 metadata {
@@ -14,48 +16,54 @@ metadata {
         capability "Motion Sensor"    //"active", "inactive"
         capability "Light"
         capability "Switch"
-        capability "Switch Level"
-        capability "ChangeLevel"
+        capability "Switch Level"     // water level
+        capability "ChangeLevel"      
         capability "Actuator"
         capability "Contact Sensor"  //"open", "closed"
         capability "Presence Sensor"
-        capability "AudioVolume"
+        capability "AudioVolume"     // humidifiying setpoint
         capability "Lock"            //"locked", "unlocked"
         
         attribute "operatingState", "ENUM" // ["humidifying", "idle", "off"]
         attribute "hysteresis", "NUMBER"  // hysteresis
         attribute "humidity", "NUMBER"    // Room Humidity
         attribute "display", "STRING"     // Dashboard icon display status
-        attribute "power", "ENUM"       // power metering outlet (set in sync app)
+        attribute "power", "ENUM"         // power metering outlet (set in sync app)
         attribute "presence", "ENUM"      // Water level description
-        attribute "waterLevel", "NUMBER"  // water level %
-        attribute "volume", "NUMBER"      // water level %
+        attribute "volume", "NUMBER"      // humidifiying setpoint
         attribute "mute", "ENUM"          // unused (comes with volume)
         attribute "motion", "ENUM"        // Sanitization alexa switch - active activates sanitization
         attribute "lock", "ENUM"          // switch for sanitize on/off when humidifier on 
         attribute "checkError", "ENUM"    // check power to see if humidifier is on/off when should/should not be
+        attribute "humidifyingSetpoint", "ENUM"
+        attribute "energyDuration", "ENUM"
 
         // Commands needed to change internal attributes of virtual device.
         command "setHumidifyingSetpoint", ["NUMBER"]
-        command "setOperatingState", ["ENUM"]
+        command "setOperatingState", [[name:"operatingState",type:"ENUM", description:"Set Operating State", constraints:["humidifying","idle"]]]
         command "setHumidity", ["NUMBER"]
         command "setHysteresis", ["NUMBER"]
         command "manageCycle"
         command "setDisplay", ["STRING"]
         command "setPower", ["ENUM"]
         command "setPresence", [[name:"waterLevel",type:"ENUM", description:"Set Water Level", constraints:["full","half","empty","fill"]]]
-        command "setWaterLevel", ["NUMBER"]
         command "setVolume", ["NUMBER"]
         command "setMotion", [[name:"motion",type:"ENUM", description:"Set Sanitization", constraints:["active","inactive"]]]
         command "setCheckError", [[name:"motion",type:"ENUM", description:"Set Sanitization", constraints:["on","off"]]]
+        command "setOuncesPerInch"
+        command "setWaterFull"
+        command "setLevelTimer"
+        command "setEnergyDuration", ["ENUM"]
 }
 
     preferences {
         input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
         input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
+        input( name: "inchesPerHour", type:"DOUBLE", title: "Inches of water used per Hour", defaultValue: 0.73)
+        input( name: "fullInches", type:"DOUBLE", title: "Tank depth in Inches", defaultValue: 16.25)
+        input( name: "fullOunces", type:"DOUBLE", title: "Tank volume in Ounces", defaultValue: 235.0)
     }
 }
-
 
 def installed() {
     log.warn "installed..." 
@@ -77,11 +85,16 @@ def initialize() {
         sendEvent(name: "Humidity", value: (humidity ?: 0).toBigDecimal())
         sendEvent(name: "Humidifying Setpoint", value: (humidifyingSetpoint ?: 45).toBigDecimal())   
                
-        state.lastRunningMode = "humidify"
-        updateDataValue("lastRunningMode", "humidify")
-        setoOperatingState("idle")
+        state.lastRunningMode = "humidifying"
+        updateDataValue("lastRunningMode", "humidifying")
+        setOperatingState("idle")
         setHumidifyingSetpoint(45)
-        setHumidiy(50)
+        setHumidity(50)
+        state.runMinutes = 0.0
+        state.percentFull = 0
+        state.runMinutes = 0.0
+        state.inchesUsed = 0.0
+        state.ouncesRemaining = 0.0
     }   
 }
 
@@ -114,19 +127,81 @@ def off() {
     }  
 }
 
+// set new level afer calcs
+def setCalcLevel(value, rate = null) {
+    if (value == null) return
+    Integer level = limitIntegerRange(value,0,100)
+    if (level == 0) {
+        off()
+        return
+    }    
+    String verb = (device.currentValue("level") == level) ? "is" : "was set to"
+    eventSend("level",verb,level,"%")   
+    runIn(1,setDisplay)
+    runIn(1,setLevelPresence)    
+}
+
+// Set new level from slider (update state variables)
 def setLevel(value, rate = null) {
     if (value == null) return
     Integer level = limitIntegerRange(value,0,100)
     if (level == 0) {
         off()
         return
-    }
-    if (device.currentValue("switch") != "on") on()
+    }    
     String verb = (device.currentValue("level") == level) ? "is" : "was set to"
-    eventSend("level",verb,level,"%")
-    sendEvent(name: "humidifyingSetpoint", value: level, descriptionText: getDescriptionText("humidifyingSetpoint set to ${level}"))
+    eventSend("level",verb,level,"%")       
+    // reverse calcs from percent full to set other states
+    state.percentFull = value
+    double fullInches = settings?.fullInches
+    state.inchesRemaining = (fullInches * state?.percentFull)/100
+    logDebug("New Inches Remaining is ${state?.inchesRemaining}")
+    state.inchesUsed = fullInches - state?.inchesRemaining
+    logDebug("Inches Used is ${state?.inchesUsed}")
+    //BigDecimal ouncesPerInch = new BigDecimal(settings?.ouncesPerInch)
+    state.ouncesRemaining = state?.inchesRemaining * state?.ouncesPerInch 
+    double inchesPerHour = settings?.inchesPerHour
+    double runMinutes = state?.inchesUsed * (inchesPerHour * 60)
+    logDebug("New runMinutes double is ${runMinutes}")
+    state.runMinutes = Integer.valueOf(runMinutes.intValue())
+    runIn(1,setDisplay)
+    runIn(1,setLevelPresence)
+}
+
+/* set water level presence description */
+def setLevelPresence() {
+    logDebug "setLevelPresence() was called"
+    def level = device.currentValue("level")
+    if (level <= 1) setPresence("empty")
+    if (level > 1 && level < 10) setPresence("fill")
+    if (level >= 10 && level < 38) setPresence("one-quarter")
+    if (level >= 38 && level < 68) setPresence("half")
+    if (level >= 68 && level < 88) setPresence("three-quarter")
+    if (level >= 88 && level <= 100) setPresence("full")
+}
+
+def setPresence(setpoint) {
+    logDebug "sePresence(${setpoint}) was called"
+    sendEvent(name: "presence", value: setpoint, descriptionText: getDescriptionText("presence set to ${setpoint}"))
+    runIn(1,setDisplay)
+}
+
+// volume is humidifiying setpoint
+def setVolume(setpoint) {
+    logDebug "setVolume(${setpoint}) was called"
+    sendEvent(name: "volume", value: setpoint, unit: "%", descriptionText: getDescriptionText("volume set to ${setpoint}"))
+    sendEvent(name: "humidifyingSetpoint", value: setpoint, descriptionText: getDescriptionText("humidifyingSetpoint set to ${setpoint}"))
+    //if (device.currentValue("switch") != "on") on()
     runIn(1, manageCycle)
     runIn(1, setDisplay)
+    
+}
+
+// setpoint matches volume
+def setHumidifyingSetpoint(setpoint) {
+    logDebug "setHumidifyingSetpoint(${setpoint}) was called"
+    sendEvent(name: "humidifyingSetpoint", value: setpoint, descriptionText: getDescriptionText("humidifyingSetpoint set to ${setpoint}"))
+    sendEvent(name: "volume", value: setpoint, unit: "%", descriptionText: getDescriptionText("volume set to ${setpoint}"))
 }
 
 Integer limitIntegerRange(value,min,max) {
@@ -136,11 +211,11 @@ Integer limitIntegerRange(value,min,max) {
 
 def setDisplay() {
     logDebug "setDisplay() was called"
-    String display = "Humidity: "+ device.currentValue("humidity")+"%<br> Setpoint: "+ device.currentValue("humidifyingSetpoint")+"%<br> Water: "+device.currentValue("volume")+"%<br> "+device.currentValue("operatingState")
+    String display = "Humidity: "+ device.currentValue("humidity")+"%<br> Setpoint: "+ device.currentValue("humidifyingSetpoint")+"%<br> Water: "+device.currentValue("level")+"%<br> "+device.currentValue("operatingState")
     sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
 }
 
-def setOperatingState (state) {
+def setOperatingState(state) {
     logDebug "setOperatingState(${state}) was called"
     sendEvent(name: "operatingState", value: state, descriptionText: getDescriptionText("operatingState set to ${state}"))   
     runIn(1,setDisplay)
@@ -158,10 +233,10 @@ def logsOff(){
 
 def manageCycle(){
 
-    def hysteresis = (device.currentValue("hysteresis")).toBigDecimal()
+    def hysteresis = (device.currentValue("hysteresis"))
 
-    def humidifyingSetpoint = (device.currentValue("humidifyingSetpoint"))
-    def humidity = (device.currentValue("humidity"))
+    def humidifyingSetpoint = (device.currentValue("humidifyingSetpoint")).toBigDecimal()
+    def humidity = (device.currentValue("humidity")).toBigDecimal()
     def operatingState = (device.currentValue("operatingState"))
     
     def humidifyingOn = (humidity <= (humidifyingSetpoint - hysteresis))
@@ -172,6 +247,7 @@ def manageCycle(){
         if (device.currentValue("lock") == "locked") {
             sendEvent(name: "motion", value: "active", isStateChange: forceUpdate)
         }
+        runIn(1,setLevelTimer)
     }
     else if ((!humidifyingOn && operatingState != "idle")){  
         setOperatingState("idle")
@@ -180,7 +256,86 @@ def manageCycle(){
             sendEvent(name: "motion", value: "inactive", isStateChange: forceUpdate)
         }    
     }
-    runIn(1,setDisplay)
+    runIn(1,setDisplay)   
+}
+
+def setLevelTimer() {
+    if (device.currentValue("operatingState") == "humidifying") {
+        runIn(60,countMinutes)
+         logDebug "Level timer started"
+    }
+}
+
+def countMinutes() {
+    setOuncesPerInch()
+    if (device.currentValue("operatingState") == "humidifying") {
+        state.runMinutes = state?.runMinutes + 1
+        BigDecimal inchesPerHour = new BigDecimal(settings?.inchesPerHour)
+        state.inchesUsed = (inchesPerHour * (state?.runMinutes/60))
+        BigDecimal fullInches = new BigDecimal(settings?.fullInches)
+        state.inchesRemaining = fullInches - state?.inchesUsed
+        logDebug "inchesRemaining is ${state?.inchesRemaining}"
+        logDebug "ouncesPerInch is ${state?.ouncesPerInch}"
+
+        def ouncesRemaining = state?.ouncesPerInch * state?.inchesRemaining
+
+        logDebug "ouncesRemaingin def is ${ouncesRemaining}"
+        state?.ouncesRemaining = ouncesRemaining
+        logDebug "inchesRemaining is ${state?.inchesRemaining}"
+        logDebug "fullInches is ${fullInches}"
+        logDebug "inchesUsed is ${state?.inchesUsed}"
+        BigDecimal percentFull = 100*((fullInches - state?.inchesUsed) / fullInches)
+        logDebug "percentFull BD is ${percentFull}"
+        state.percentFull = Integer.valueOf(percentFull.intValue())
+        logDebug "percentFull is ${state?.percentFull}"
+        setCalcLevel(state?.percentFull)
+    }
+    setLevelTimer()
+}
+
+/*
+def countDeviceMinutes() {
+    setOuncesPerInch()
+    if (device.currentValue("operatingState") == "humidifying") {
+        humidifierPower.refresh()       // refesh energyDuration
+        pauseExecution(500)             // time to refresh
+        String duration = humidifierPower.currentValue("energyDuration")
+        def durationMin = duration.replace(" Mins", "")
+        BigDecimal minutes = new BigDecimal(durationMin)
+        def runDuration = minutes
+        state.runDuration = runDuration
+        BigDecimal inchesPerHour = new BigDecimal(settings?.inchesPerHour)
+        def inchesUsed = (inchesPerHour * (runDuration/60))
+        BigDecimal fullInches = new BigDecimal(settings?.fullInches)
+        def inchesRemaining = fullInches - inchesUsed
+        logDebug("Minutes is ${minutes}")
+        logDebug "inchesRemaining is ${state?.inchesRemaining}"
+        logDebug "ouncesPerInch is ${state?.ouncesPerInch}"
+    }
+}*/
+
+def setOuncesPerInch() {
+    BigDecimal fullOunces = new BigDecimal(settings?.fullOunces) 
+    BigDecimal fullInches = new BigDecimal(settings?.fullInches) 
+    state?.ouncesPerInch = fullOunces / fullInches
+    logDebug "ouncesPerInch is ${state?.ouncesPerInch}"
+}
+
+def setWaterFull() {
+    setOuncesPerInch()
+    state.runMinutes = 0
+    state.inchesUsed = 0
+    state.inchesRemaining = settings?.fullInches
+    logDebug "fullOunces is ${settings?.fullOunces}"
+    logDebug "fullInches is ${settings?.fullInches}"
+    BigDecimal fullOunces = new BigDecimal(settings?.fullOunces) 
+    BigDecimal fullInches = new BigDecimal(settings?.fullInches) 
+    state.ouncesPerInch = fullOunces / fullInches
+    BigDecimal ouncesPerInch = new BigDecimal(state?.ouncesPerInch)
+    BigDecimal inchesRemaining = new BigDecimal(state?.inchesRemaining)
+    state.ouncesRemaining = ouncesPerInch * inchesRemaining
+    state.percentFull = 100.0
+    setLevel(state?.percentFull)
 }
 
 /* Check power use to see if humidifier is not in sync with expected on-off status  */
@@ -189,9 +344,9 @@ def checkError() {
     def humidity = (device.currentValue("humidity"))
     def humidifyingSetpoint = (device.currentValue("humidifyingSetpoint"))
     def hysteresis = (device.currentValue("hysteresis")).toBigDecimal()    
-    def power = (device.currentValue("power"))
+    double power = Double.parseDouble(device.currentValue("power"))
     def humidifyingOn = (humidity <= (humidifyingSetpoint - hysteresis))
-    if (!humidifyingOn && power.toInteger() > 10) {
+    if (!humidifyingOn && power > 10.0) {
         logDebug "ERROR: Humidifier on when it should be off - turning off"
         setOperatingState("idle")
         off()
@@ -200,7 +355,7 @@ def checkError() {
         }  
         setOperatingState("idle")
     }   
-    if (humidifyingOn && power.toInteger() < 10) {
+    if (humidifyingOn && power < 10.00) {
         logDebug "ERROR: Humidifier off when it should be on - turning on"
         setOperatingState("humidifying")
         on()
@@ -226,40 +381,22 @@ def setHumidity(humidity) {
 }
 
 def setCheckError(state) {
-    logDebug "setCheckError(${statae}) was called"
+    logDebug "setCheckError(${state}) was called"
     sendEvent(name: "checkError", value: state, descriptionText: getDescriptionText("checkError set to ${state}"))
     if (state == "on") {
         runIn(1,checkError)
     }
 }
 
-def setHumidifyingSetpoint(setpoint) {
-    logDebug "setHumidifyingSetpoint(${setpoint}) was called"
-    runIn(1,setLevel(setpoint,null))
+def setEnergyDuration(duration) {
+    logDebug "setEnergyDuration(${duration}) was called"
+    sendEvent(name: "energyDuration", value: duration, descriptionText: getDescriptionText("energyDuration set to ${duration}"))
 }
 
 def setHysteresis(setpoint) {
     logDebug "setHysteresis(${setpoint}) was called"
     sendEvent(name: "hysteresis", value: setpoint, descriptionText: getDescriptionText("hysteresis set to ${setpoint}"))
     runIn(1, manageCycle)
-}
-
-def setPresence(setpoint) {
-    logDebug "sePresence(${setpoint}) was called"
-    sendEvent(name: "presence", value: setpoint, descriptionText: getDescriptionText("presence set to ${setpoint}"))
-    runIn(1,setDisplay)
-}
-
-def setWaterLevel(setpoint) {
-    logDebug "seWaterLevel(${setpoint}) was called"
-    sendEvent(name: "waterLevel", value: setpoint, unit: "%", descriptionText: getDescriptionText("waterLevel set to ${setpoint}"))
-    runIn(1,setDisplay)
-}
-
-def setVolume(setpoint) {
-    logDebug "setVolume(${setpoint}) was called"
-    sendEvent(name: "volume", value: setpoint, unit: "%", descriptionText: getDescriptionText("volume set to ${setpoint}"))
-    runIn(1,setDisplay)
 }
 
 def mute() {
@@ -294,6 +431,11 @@ def unlock(setpoint) {
 
 private logDebug(msg) {
     if (settings?.logEnable) log.debug "${msg}"
+}
+
+def logsOff(){
+	log.warn "debug logging disabled..."
+	device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
 
 private getDescriptionText(msg) {

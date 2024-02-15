@@ -16,6 +16,9 @@ metadata {
         capability "Switch Level"
         capability "ChangeLevel"
         capability "Actuator"
+
+        attribute "command", "ENUM"
+
 }
 
     preferences {
@@ -31,6 +34,14 @@ metadata {
 def installed() {
     log.warn "installed..." 
     device.updateSetting("txtEnable",[type:"bool",value:true])
+
+    state.key = [[value:"0", command:"Never Used"],[value:"99", command:"Reset"]]   
+    def i = ""
+    for (x=1; x<98; x++) {
+        i = x.toString()
+        state.key.add([value:i, command:""])
+    }
+    state.commands = [[value:"99", command:"Reset"]]
     initialize()
 }
 
@@ -39,6 +50,7 @@ def updated() {
     log.warn "debug logging is: ${logEnable == true}"
     log.warn "description logging is: ${txtEnable == true}"
     if (logEnable) runIn(1800,logsOff)
+
     initialize()
 }
 
@@ -46,7 +58,7 @@ def initialize() {
     if (state?.lastRunningMode == null) {    
 
     }   
-}
+} 
 
 def parse(String description) { noCommands("parse") }
 
@@ -80,6 +92,7 @@ def setLevel(value, rate = null) {
     String verb = (device.currentValue("level") == level) ? "is" : "was set to"
     eventSend("level",verb,level,"%")
     if (settings?.returnToLevel) runIn(settings?.returnSeconds.toInteger(), returnToLevel)
+    setCommand(value)
 }
 
 def returnToLevel() {
@@ -92,6 +105,69 @@ def returnToLevel() {
 Integer limitIntegerRange(value,min,max) {
     Integer limit = value.toInteger()
     return (limit < min) ? min : (limit > max) ? max : limit
+}
+
+def setCommand(value) {
+	logDebug "setCommand(${value}) was called"
+    def level = value.toInteger()
+    def action = ""
+
+    // bedroom
+    if (value == 1) {action = "Day Time"}
+    else if (value == 2) {action = "Dim Lights"}
+    else if (value == 3) {action = ""}   // evening
+    else if (value == 4) {action = ""}  
+    else if (value == 5) {action = "Good Morning"}
+    else if (value == 6) {action = "Good Night"}
+    else if (value == 7) {action = "TV Time"}
+    else if (value == 8) {action = "Nap Time"}
+    else if (value == 9) {action = "Bedroom Scheduled Mode"}
+    else if (value == 10) {action = "Watch the Back Door"}
+    else if (value == 11) {action = "Reading Light"}
+    else if (value == 12) {action = "Cable TV "}
+    else if (value == 13) {action = "Streaming TV"}
+    // Heating cooling
+    else if (value == 20) {action = ""}
+    else if (value == 21) {action = ""}
+    else if (value == 22) {action = ""}
+    else if (value == 23) {action = ""}
+    // theater
+    else if (value == 27) {action = "Projector On"}
+    else if (value == 28) {action = "Projector Off"}
+    else if (value == 29) {action = "Screen Mode"}
+    else if (value == 30) {action = "Work Mode"}
+    else if (value == 31) {action = "Room Mode"}
+    // Sensors
+    else if (value == 35) {action = "Bedroom Sensor Off"}
+    else if (value == 36) {action = "Bedroom Sensor On"}
+    else if (value == 37) {action = "Front Sensor Off"}
+    else if (value == 38) {action = "Front Sensor On"}
+    // Basement
+    else if (value == 42) {action = ""}
+    // Bedroom Heating Cooling
+    else if (value == 50) {action = "I am cold"}
+    else if (value == 51) {action = "I am warm"}
+    else if (value == 52) {action = "I am hot"}
+    // Front Scenes
+    else if (value == 60) {action = "Lights On"}   // front lights on
+    else if (value == 61) {action = "Lights Off"}  // front lights off
+    else if (value == 62) {action = "Dinner Time"}
+    else if (value == 63) {action = "Dinner is Over"}
+    else if (value == 64) {action = "Dru is Home"}
+    else if (value == 65) {action = "Dim Front Lights"}
+    else if (value == 66) {action = ""}
+    else if (value == 67) {action = "Front Scheduled Mode"}
+    else if (value == 68) {action = "I Want to Read"}
+    else if (value == 69) {action = "Do we have Mail?"}
+    else if (value == 72) {action = "Front Lights Bright"}
+    // Testing
+    else if (value == 95) {action = ""}
+    else {action = "Unused Code"}
+
+    if (action == "") {action = "Empty Code"}
+    sendEvent(name: "command", value: action ,descriptionText: "${action} Triggered")
+
+    state?.commands = [value: "${value}", command: "${action}"]
 }
 
 private logDebug(msg) {

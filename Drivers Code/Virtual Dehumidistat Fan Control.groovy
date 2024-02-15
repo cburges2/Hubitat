@@ -14,7 +14,7 @@ metadata {
         capability "Light"
         capability "Switch"
         capability "Actuator"
-        capability "Contact Sensor" //"open", "closed"
+        //capability "Contact Sensor" //"open", "closed"
         capability "Fan Control"
         capability "Motion Sensor"  //"active", "inactive"
 
@@ -145,14 +145,14 @@ def manageCycle(){
         setOperatingState("dehumidifying")
         String verb = (device.currentValue("switch") == "on") ? "is" : "was turned"
         eventSend("switch",verb,"on")    
-        sendEvent(name: "contact", value: "open", isStateChange: forceUpdate)
+        //sendEvent(name: "contact", value: "open", isStateChange: forceUpdate)
     }
     else if ((!dehumidifyingOn && operatingState != "idle")){
         if (state.switch == false) {
             setOperatingState("idle")
             String verb = (device.currentValue("switch") == "off") ? "is" : "was turned"
             eventSend("switch",verb,"off")
-            sendEvent(name: "contact", value: "closed", isStateChange: forceUpdate)
+            //sendEvent(name: "contact", value: "closed", isStateChange: forceUpdate)
         }
     }
     runIn(1,setDisplay)
@@ -226,6 +226,11 @@ def autoFanOff() {
 
 private logDebug(msg) {
     if (settings?.logEnable) log.debug "${msg}"
+}
+
+def logsOff(){
+	log.warn "debug logging disabled..."
+	device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
 
 private getDescriptionText(msg) {
