@@ -23,6 +23,11 @@
 	- Tracks rise and fall changes to determine cycle highs and lows for calcs.  
 	- Cycles are counted.  If it takes more than two cycles to get to temp, cycle time is increased regardless of end temp.  
 	- Center the cycles around the setpoint by adjusting the cycle hysteresis based on averge of cycle high/low. 
+
+	Version 3.0 3/12/24
+	- Enough with the adjusting, slope is now calculated during the rise/fall period, and a five-point running averge of slope values is used to calculate a 
+	  cycle seconds directly using a room coefficient.  For Heat, Cycle when temp falling below cycle point, wait for a period after the cycle, stop when heating when temperature is rising. 
+	  Reverse is true with cool.  Below/above ramp point will constantly ramp to temperature. 
 */
 
 import groovy.time.*
@@ -69,6 +74,7 @@ metadata {
 		command "setTemperature", ["NUMBER"]
 		command "setThermostatOperatingState", ["ENUM"]
 		command "setThermostatSetpoint", ["NUMBER"]
+		command "setAutoSetpoint", ["NUMBER"]
 		command "setSupportedThermostatFanModes", ["JSON_OBJECT"]
 		command "setSupportedThermostatModes", ["JSON_OBJECT"]
         command "setThermostatFanMode", [[name:"thermostatFanMode",type:"ENUM", description:"Thermo Fan Mode", constraints:["on","auto","circulate"]]]
@@ -1004,6 +1010,22 @@ def updateThermostatSetpoint(mode) {
 def setThermostatSetpoint(setpoint) {   
 	logDebug "setThermostatSetpoint(${setpoint}) was called"
 	updateSetpoints(setpoint, null, null, null)
+}
+
+def setAutoSetpoint(setpoint) {
+
+	def coolOffset = setpoint.toInteger() + 1
+	def heatOffset = setpoint.toINteger() - 1
+
+	def mode = device.currentValue("thermostatMode")
+	if (mode == "cool") {
+		setCoolingSetpoint(setpoint)
+		setHeatingSetpoint(heatOffset)
+	}
+	if (mode == "heat") {
+		setHeatingSetpoint(setpoint)
+		setCoolingSetpoint(coolOffset)
+	}
 }
 
 def setCoolingSetpoint(setpoint) {
