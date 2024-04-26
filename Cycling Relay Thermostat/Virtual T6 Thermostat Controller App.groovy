@@ -508,7 +508,7 @@ def checkStates() {
         if (physicalThermostat.getLabel() == "Bedroom Thermostat") {
             def acState = virtualThermostat.currentValue("presence")
             if (virtualState == "cooling" && acState != "cool") {fanSwitch.setCool()} // cool
-            else if (virtualState == "cooling" && acState != "cool") {fanSwitch.setFan()} // fan
+            else if (virtualState != "cooling" && acState == "cool") {fanSwitch.setFan()} // fan
         }
 
         if (heatRelay.currentValue("switch") == "on") {heatRelay.off()}
