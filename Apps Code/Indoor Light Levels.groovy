@@ -33,16 +33,6 @@ def mainPage() {
               multiple: false,
               submitOnChange: true             
             )
-            if (lightSensor) {
-                input (
-                    name: "trackLightSensor", 
-                    type: "bool", 
-                    title: "Track Light Sensor Changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            } 
-
         }
 
         section("<b>Auto Light Target Dimmer</b>") {
@@ -54,16 +44,6 @@ def mainPage() {
               multiple: false,
               submitOnChange: true             
             )
-
-            if (lightTarget) {
-                input (
-                    name: "trackLightTarget", 
-                    type: "bool", 
-                    title: "Track Light Target Dimmer", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            } 
         }
 
         section("<b>Front Sensor Data Device</b>") {
