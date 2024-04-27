@@ -383,18 +383,21 @@ def calcLightLevels() {
 
             // update rooms if Active
             def frontMode = frontData.currentValue("frontMode")
-            def kitchenActive = frontData.currentValue("kitchenMotionStatus") == "Active"
-            def livingRoomActive = frontData.currentValue("livingRoomMotionStatus") == "Active"            
+            def kitchenActive = frontData.currentValue("kitchenMotionStatus") != "Timeout"
+            def livingRoomActive = frontData.currentValue("livingRoomMotionStatus") != "Timeout"     
+            def druNotHome = frontData.currentValue("druHome") == "No"       
+
             logDebug("Front Mode is ${frontMode}")
-            if (kitchenActive) {
+            logDebug("Dru Not Home is is ${druNotHome}")
+            if (kitchenActive && druNotHome) {
                 logDebug("Kitchen Being Updated")    // trigger kitchen
                 sceneActivator.setKitchenScene(frontMode)
-            } else {logDebug("Kitchen is not Active")}
+            } else {logDebug("Kitchen is not Active or Dru Home")}
             pauseExecution(500)
-            if (livingRoomActive) {
+            if (livingRoomActive && druNotHome) {
                 logDebug("Living Room Being Updated")  // trigger Living Room
                 sceneActivator.setLivingRoomScene(frontMode)
-            } else {logDebug("Living Room is not Active")}
+            } else {logDebug("Living Room is not Active or Dru Home")}
             if (targetOn) runIn(45,checkLightLevels)
         } else logDebug("Levels do not need updating")
 
