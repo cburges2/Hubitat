@@ -40,11 +40,13 @@ metadata {
 		attribute "icon", "STRING"                  // status icon attribute to be use on a dashboard tile
 		attribute "iconText", "STRING"
 		attribute "iconFile", "STRING"
+		attribute "messege", "STRING"
 
 		// Commands needed to change internal attributes of virtual device.
         command "setOperatingState", [[name:"operatingState",type:"ENUM", description:"Set Operating State", constraints:["venting","idle"]]]
 		command "setAtticHumidity", ["ENUM"]
 		command "setOutsideHumidity", ["ENUM"]
+		command "setOverrideTemp", ["NUMBER"]
         command "setHysteresis", ["NUMBER"]
         command "manageCycle"
         command "setDisplay"
@@ -55,6 +57,7 @@ metadata {
         command "setFanSpeed", [[name:"fanSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["low","medium","high"]]]
         command "setPresence", [[name:"presence",type:"ENUM", description:"Set Why Venting", constraints:["humidity","temperature","both","none"]]]
 		command "setIcon", ["STRING"]
+		command "setMessege", ["STRING"]
 }
 
 	preferences {
@@ -133,13 +136,16 @@ Integer limitIntegerRange(value,min,max) {
 }
 
 def setDisplay() {
+	def venting = device.currentValue("presence")
+	def messege = device.currentValue("messege") 
+	if (venting == "none" && messege != " ") venting = messege
 	logDebug "setDisplay() was called"
     String display = "Attic: "+(device.currentValue("atticHumidity"))+"% "+(device.currentValue("atticTemp"))+"°<br>  Out: "+(device.currentValue("outsideHumidity"))+"% "+(device.currentValue("outsideTemp"))+"°<br> "+(device.currentValue("operatingState"))+"<br>"+(device.currentValue("presence")) 
     String display2 = "°% Setpoint: "+settings?.overrideTemp+"°<br>% Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"% <br> ° Setpoint: "+(device.currentValue("atticTempSetpoint"))+"°" 
     String iconText = (device.currentValue("atticHumidity"))+"% "+(device.currentValue("atticTemp"))+"°"
 	def autoFan = "auto"
 	if (settings?.autoFan == false) autoFan ="manual"	
-	String displayAll = "Attic Humidity: "+(device.currentValue("atticHumidity"))+"%<br>Outside Humidity: "+(device.currentValue("outsideHumidity"))+"%<br>Humidity Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"%<br><br>Attic Temperature: "+(device.currentValue("atticTemp"))+"°<br>Outside Temperature:   "+(device.currentValue("outsideTemp"))+"°<br>Temperature Setpoint: "+(device.currentValue("atticTempSetpoint"))+"°<br><br>Operating State:  "+(device.currentValue("operatingState"))+"<br>Venting:       "+(device.currentValue("presence"))+"<br><br>"+
+	String displayAll = "Attic Humidity: "+(device.currentValue("atticHumidity"))+"%<br>Outside Humidity: "+(device.currentValue("outsideHumidity"))+"%<br>Humidity Setpoint: "+(device.currentValue("atticHumidSetpoint"))+"%<br><br>Attic Temperature: "+(device.currentValue("atticTemp"))+"°<br>Outside Temperature:   "+(device.currentValue("outsideTemp"))+"°<br>Temperature Setpoint: "+(device.currentValue("atticTempSetpoint"))+"°<br><br>Operating State:  "+(device.currentValue("operatingState"))+"<br>Venting:  "+venting+"<br><br>"+
 	    "Temp Override Humidity: "+settings?.overrideTemp+"°<br><br>Fan Setting: "+autoFan+"<br>Fan Speed: "+device.currentValue("fanSpeed")+"<br>"+
 		"<br>Medium Speed Difference: "+settings?.fanMediumThreshold+"°%<br>High Speed Difference: "+settings?.fanHighThreshold+"°%"
 	String display3 = "Fan: "+autoFan+"<br>Speed: "+device.currentValue("fanSpeed")+"<br>"
@@ -156,17 +162,13 @@ def setOperatingState (state) {
     sendEvent(name: "operatingState", value: state, descriptionText: getDescriptionText("operatingState set to ${state}"))   
 }
 
-def logsOff(){
-	log.warn "debug logging disabled..."
-	device.updateSetting("logEnable",[value:"false",type:"bool"])
-}
-
 def setPrefAttributes() {
 	def ot = settings?.overrideTemp.toBigDecimal()
 	sendEvent(name: "overrideTemp", value: ot, descriptionText: getDescriptionText("overrideTemp set to ${ot}"))
 }
 
 def manageCycle() {
+	setMessege(" ")
 	def atticHumidity = device.currentValue("atticHumidity").toInteger()
 	def outsideHumidity = device.currentValue("outsideHumidity").toInteger()
 	def atticHumidSetpoint = (device.currentValue("atticHumidSetpoint")).toInteger()	
@@ -185,11 +187,17 @@ def manageCycle() {
 	def atticHumidityOn = (atticHumidity > outsideHumidity) && (atticHumidity > atticHumidSetpoint)		// checks if vent for temp within outside humidity setpoint
 	def runTemp = (atticHumidity < outsideHumidity) || (atticHumidity < atticHumidSetpoint)	            // checks humidity difference and humidTemp setpoint before venting for temperature difference
 	def tempOn = (atticTemp > outsideTemp) && (atticTemp > atticTempSetpoint)  // checks to vent for temp difference only if attic temp greater than setpoint. 
+	logDebug("tempOn is ${tempOn}")
 
 	logDebug "humidTemp is (${humidTemp})"
 	logDebug "atticHumidityOn is (${atticHumidityOn})"
 	logDebug "runTemp is (${runTemp})"
 	logDebug "tempOn is (${tempOn})"
+
+	// messages
+	def ventStopped = tempOn && (atticHumidity > atticHumidSetpoint) && (atticTemp < maxTemp)
+	logDebug("ventStopped is ${ventStopped}")
+	if (ventStopped) {setMessege("Not Venting due to outside Humidity")}
 
     // define temperature actions
 	def onTemp = (tempOn && runTemp && humidTemp) || (tempOn && atticHumidityOn)            // vent for temp if idle, and humidity in range 
@@ -344,6 +352,12 @@ def setAtticTempSetpoint(temp) {
     runIn(1, manageCycle)
 }
 
+def setOverrideTemp(temp) {
+	logDebug "setOverrideTemp(${temp}) was called"
+    sendEvent(name: "overrideTemp", value: temp, descriptionText: getDescriptionText("overrideTemp set to ${temp}"))
+    runIn(1, manageCycle)
+}
+
 def setAtticHumidSetpoint(humid) {
 	logDebug "setAtticHumidSetpoint(${humid}) was called"
     sendEvent(name: "atticHumidSetpoint", value: humid, descriptionText: getDescriptionText("atticHumidSetpoint set to ${humid}"))
@@ -372,6 +386,11 @@ def setIcon(img) {
 		sendEvent(name: "icon", value: "<img class='icon' src='${settings?.iconPath}${img}' />")
 		sendEvent(name: "iconFile", value: img)
 	}
+}
+
+def setMessege(messege) {
+	logDebug "setMessege(${messege}) was called"
+    sendEvent(name: "messege", value: messege, descriptionText: getDescriptionText("messege set to ${messege}"))
 }
 
 def logsOff(){
