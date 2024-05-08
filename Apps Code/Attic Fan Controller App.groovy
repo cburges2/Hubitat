@@ -40,16 +40,6 @@ def mainPage() {
               multiple: false,
               submitOnChange: true               
             )
-            
-            if (atticFanController) {
-                input (
-                    name: "trackAtticFan", 
-                    type: "bool", 
-                    title: "Track Attic Fan Changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            } 
         }
 
         section("<b>Outside Humidity Sensor Device</b>") {
@@ -60,17 +50,7 @@ def mainPage() {
                 required: true, 
                 multiple: false,
                 submitOnChange: true
-            )
-
-            if (outsideHumidity) {
-                input (
-                    name: "trackOutsideHumidity", 
-                    type: "bool", 
-                    title: "Track Outside Humidity Changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            }             
+            )          
         }
 
         section("<b>Outside Temperature Sensor Device</b>") {
@@ -81,17 +61,7 @@ def mainPage() {
                 required: true, 
                 multiple: false,
                 submitOnChange: true
-            )
-
-            if (outsideTemperature) {
-                input (
-                    name: "trackOutsideTemperature", 
-                    type: "bool", 
-                    title: "Track Outside Temperature Changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            }             
+            )            
         }
         
         section("<b>Attic Humidity Sensor Device</b>") {
@@ -102,17 +72,7 @@ def mainPage() {
                 required: true, 
                 multiple: false,
                 submitOnChange: true
-            )
-
-            if (atticHumidity) {
-                input (
-                    name: "trackAtticHumidity", 
-                    type: "bool", 
-                    title: "Track Attic Humidity changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            }             
+            )      
         }
 
         section("<b>Attic Temperature Sensor Device</b>") {
@@ -123,17 +83,7 @@ def mainPage() {
                 required: true, 
                 multiple: false,
                 submitOnChange: true
-            )
-
-            if (atticTemperature) {
-                input (
-                    name: "trackAtticTemperature", 
-                    type: "bool", 
-                    title: "Track Attic Temperature changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            }             
+            )         
         }
         
         section("<b>Attic Fan Switch Device</b>") {
@@ -155,6 +105,18 @@ def mainPage() {
                 multiple: false,
                 submitOnChange: true
             )        
+        }
+
+        if (googleLogs) {
+            section("") {
+                input (
+                    name: "googleLogging", 
+                    type: "bool", 
+                    title: "Enable Google logging", 
+                    required: true, 
+                    defaultValue: false
+                )
+            }
         }
 
         section("") {
@@ -180,9 +142,9 @@ def installed() {
 }
 
 def updated() {
-    initialize()
-    startLogTimer()
+   
     if (settings?.debugMode) runIn(3600, logDebugOff)   // one hour
+    initialize()
 }
 
 def initialize() {
@@ -192,33 +154,29 @@ def initialize() {
     subscribe(outsideTemperature, "temperature", setOutsideTemp)
     subscribe(atticTemperature, "temperature", setAtticTemp)    
     subscribe(atticFanController, "operatingState", setSwitch)
-
-    startLogTimer()
 }
 
-def startLogTimer() {
-    runIn(60,logToGoogle)
-}
-
+// ** Log to Google **
 def logToGoogle() {
+    if (googleLogging) {
+        def atticTemp = atticFanController.currentValue("atticTemp")
+        def atticHumidity = atticFanController.currentValue("atticHumidity")
+        def outsideTemp = atticFanController.currentValue("outsideTemp")
+        def outsideHumidity = atticFanController.currentValue("outsideHumidity")
+        def atticHumidSetpoint = atticFanController.currentValue("atticHumidSetpoint")
+        def atticTempSetpoint = atticFanController.currentValue("atticTempSetpoint")
+        def overrideTemp = atticFanController.currentValue("overrideTemp")
+        def presence = atticFanController.currentValue("presence")
 
-    startLogTimer()
-    def atticTemp = atticFanController.currentValue("atticTemp")
-    def atticHumidity = atticFanController.currentValue("atticHumidity")
-    def outsideTemp = atticFanController.currentValue("outsideTemp")
-    def outsideHumidity = atticFanController.currentValue("outsideHumidity")
-    def atticHumidSetpoint = atticFanController.currentValue("atticHumidSetpoint")
-    def atticTempSetpoint = atticFanController.currentValue("atticTempSetpoint")
-    def overrideTemp = atticFanController.currentValue("overrideTemp")
-    def presence = atticFanController.currentValue("presence")
+        def onTemp = 0.0
+        def onHumid = 0.0
+        if (presence == "humidity" || presence == "both") onHumid = atticHumidSetpoint
+        if (presence == "temperature" || presence == "both") onTemp = atticTempSetpoint
 
-    def onTemp = 0.0
-    def onHumid = 0.0
-    if (presence == "humidity" || presence == "both") onHumid = atticHumidSetpoint
-    if (presence == "temperature" || presence == "both") onHumid = atticTempSetpoint
-
-    def logParams = "Attic Temp="+atticTemp+"&Attic Humid="+atticHumidity+"&Out Temp="+outsideTemp+"&Out Humid="+outsideHumidity+"&On Temp="+onTemp+"&On Humid="+onHumid+"&Humid Setpoint="+atticHumidSetpoint+"&Temp Setpoint="+atticTempSetpoint+"&Override Temp="+overrideTemp
-    googleLogs.sendLog("Attic", logParams) 
+        def logParams = "Attic Temp="+atticTemp+"&Attic Humid="+atticHumidity+"&Out Temp="+outsideTemp+"&Out Humid="+outsideHumidity+"&On Temp="+onTemp+"&On Humid="+onHumid+"&Humid Setpoint="+atticHumidSetpoint+"&Temp Setpoint="+atticTempSetpoint+"&Override Temp="+overrideTemp
+        googleLogs.sendLog("Attic", logParams) 
+        startLogTimer()
+    }
 }
 
 def setOutsideHumidity(evt) {
@@ -228,6 +186,7 @@ def setOutsideHumidity(evt) {
     def lvl = evt.value.toInteger()
 
     atticFanController.setOutsideHumidity(lvl)  
+    runIn(1.logToGoogle)
 }
 
 def setAtticHumidity(evt) {
@@ -237,7 +196,7 @@ def setAtticHumidity(evt) {
     def lvl = evt.value.toInteger()
 
     atticFanController.setAtticHumidity(lvl) 
-    
+    runIn(1.logToGoogle)
 }
 
 def setOutsideTemp(evt) {
@@ -246,7 +205,7 @@ def setOutsideTemp(evt) {
     def lvl = evt.value.toBigDecimal()
 
     atticFanController.setOutsideTemp(lvl) 
-
+    runIn(1.logToGoogle)
 }
 
 def setAtticTemp(evt) {
@@ -255,7 +214,7 @@ def setAtticTemp(evt) {
     def lvl = evt.value.toBigDecimal()
 
     atticFanController.setAtticTemp(lvl) 
-
+    runIn(1.logToGoogle)
 }
 
 def setSwitch(evt) {
@@ -269,6 +228,8 @@ def setSwitch(evt) {
     if (state == "idle") {
         fanOff()
     }
+
+    runIn(1.logToGoogle)
 }
 
 def fanOff() {
