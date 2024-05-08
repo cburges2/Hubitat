@@ -186,7 +186,7 @@ def setOutsideHumidity(evt) {
     def lvl = evt.value.toInteger()
 
     atticFanController.setOutsideHumidity(lvl)  
-    runIn(1.logToGoogle)
+    runIn(1,logToGoogle)
 }
 
 def setAtticHumidity(evt) {
@@ -196,7 +196,7 @@ def setAtticHumidity(evt) {
     def lvl = evt.value.toInteger()
 
     atticFanController.setAtticHumidity(lvl) 
-    runIn(1.logToGoogle)
+    runIn(1,logToGoogle)
 }
 
 def setOutsideTemp(evt) {
@@ -205,7 +205,7 @@ def setOutsideTemp(evt) {
     def lvl = evt.value.toBigDecimal()
 
     atticFanController.setOutsideTemp(lvl) 
-    runIn(1.logToGoogle)
+    runIn(1,logToGoogle)
 }
 
 def setAtticTemp(evt) {
@@ -214,7 +214,7 @@ def setAtticTemp(evt) {
     def lvl = evt.value.toBigDecimal()
 
     atticFanController.setAtticTemp(lvl) 
-    runIn(1.logToGoogle)
+    runIn(1,logToGoogle)
 }
 
 def setSwitch(evt) {
@@ -229,7 +229,7 @@ def setSwitch(evt) {
         fanOff()
     }
 
-    runIn(1.logToGoogle)
+    runIn(1,logToGoogle)
 }
 
 def fanOff() {
