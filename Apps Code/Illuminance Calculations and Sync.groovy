@@ -6,6 +6,7 @@
  *  Updates sunset, lowLight, dayLight bools as illuminance values change
  *    
  * v.2.0 - 10/23 - get states directly from defice instead of saving as state variable
+ * v.2.1 - 10/24 - added season
 **/
 import groovy.time.*
 
@@ -120,7 +121,7 @@ def mainPage() {
 
 def installed() {
 
-    state.luxArray[] = [0,0,0,0,0]
+    state.luxArray = [0,0,0,0,0]
     state.cloudinessArray = ["","","","",""]
     state.maxIlluminance = 0.0
     state.hourlyAdd = 0.0
@@ -158,6 +159,7 @@ def updated() {
 
 def initialize() {
 
+    state.moonPhase = "none"
     subscribe(weatherStation, "illuminance", illuminanceController)
     subscribe(weatherStation, "temperature", cloudCeilingController)
     subscribe(indoorSensor, "illuminance", insideSensorController)
@@ -166,7 +168,18 @@ def initialize() {
 
     schedule('0 07 22 * * ?', setMaxIlluminance)
     schedule('0 00 05 * * ?', updateNoonIlluminance)
+
+    schedule('0 0 0 21 MAR ?', setSpring,)
+    schedule('0 0 0 21 JUN ?', setSummer)
+    schedule('0 0 0 21 SEP ?', setFall)
+    schedule('0 0 0 21 DEC ?', setWinter)
+
 }
+
+def setSpring() {illuminanceData.setSeason("spring")}
+def setSummer() {illuminanceData.setSeason("summer")}
+def setFall() {illuminanceData.setSeason("fall")}
+def setWinter() {illuminanceData.setSeason("winter")}
 
 def illuminanceController(evt) {
     logDebug("Illuminance Sensor Event = ${evt.value}",1)
@@ -175,7 +188,7 @@ def illuminanceController(evt) {
     illuminanceData.setSensorIlluminance(lux)
 
     // set max illuminance
-    if (lux > illuminanceData.currentValue("maxIlluminance")) {illuminanceData.setMaxIllluminance(lux)}
+    if (lux > illuminanceData.currentValue("maxIlluminance")) {illuminanceData.setMaxIlluminance(lux)}
 
     // add to lux list
     state?.luxArray.push(lux)
@@ -375,16 +388,9 @@ def cloudsFromIlluminance(lux) {
     // set cloudiness to sunrise and sunset at edges of day
     if (minSinceSunrise > 0 && minSinceSunrise < 15) {
         cloudiness = "Sunrise"
-        //iconFile = "sunrise.svg"
     }
     if (minToSunset > 0 && minToSunset < 15) {
         cloudiness = "Sunset"
-        //iconFile = "sunset.svg"
-    }
-
-    if (minToSunset < 0 || minSinceSunrise < 0) {      
-        cloudiness = moonPhase.currentValue("moonPhase")
-        //iconFile =  moonPhase.currentValue("moonPhaseImage")          
     }
 
     // insert rain/snow if raining or snowing
@@ -392,16 +398,13 @@ def cloudsFromIlluminance(lux) {
     if (precip) {
         cloudiness = getRainRate()
         logDebug("cloudiness updated to precip ${cloudiness}")
-    }
-    
-    // get the icon file name
-    def iconFile = getIcon(cloudiness)
-
-    // update to moon Phase if night and not raining/snowing
-    if ((minToSunset < 0 || minSinceSunrise < 0) && !precip) {       
+    } else if ((minToSunset < 0 || minSinceSunrise < 0)) {       
         cloudiness = moonPhase.currentValue("moonPhase")
-        iconFile =  moonPhase.currentValue("moonPhaseImage")          
+        iconFile =  moonPhase.currentValue("moonPhaseImage")   // update to moon Phase if night and not raining/snowing       
     }    
+
+    // get the icon file name from cloudiness
+    def iconFile = getIcon(cloudiness)
 
     logDebug("Adding cloudiness as currentCondtions to Weather Station: ${cloudiness}",3)
     weatherStation.setCurrentConditions(cloudiness)
@@ -483,10 +486,11 @@ String getMostCommonCloudiness(String cloudiness) {
 def setMoonPhaseController(evt) {
     logDebug("Moon Phase Data ${evt.value}",3)
 
-    current = weatherData.currentValue("moonPhase")
-    if (current != evt.value) {
-        weatherData.setMoonPhase(evt.value)
-        logDebug("Moon Phase updated to ${evt.value}",1)
+    def newPhase = evt.value()
+    def current = state?.moonPhase
+    if (current != newPhase) {
+        weatherData.setMoonPhase(newPhase)
+        logDebug("Moon Phase updated to ${newPHase}",1)
     }
 }
 
@@ -522,9 +526,9 @@ def setMaxIlluminance() {
 }
 
 def updateNoonIlluminance() {
-    
+    app.updateSetting("logLevel",[value:"3",type:"enum"])
     def noonIlluminance = illuminanceData.currentValue("noonIlluminance").toInteger()
-    logDebug("Current Noon Illuminance is ${noonIlluminance}",3)
+    logDebug("Current Noon Illuminance is ${noonIlluminance}",1)
 
     // get the year
     def now = new Date()
@@ -549,10 +553,11 @@ def updateNoonIlluminance() {
     if (timeOfDayIsBetween(summer, winter, now)) solsticeState = "after"
     if (timeOfDayIsBetween(winter, end, now)) solsticeState = "before"
 
-    logDebug("solsticeState is ${solsticeState} solstice",3)
+    logDebug("solsticeState is ${solsticeState} solstice",1)
 
     // add or substrct to noon illuminance based on summer solstice
     def luxPerDay = illuminanceData.currentValue("luxChangePerDay").toInteger()
+    logDebug("Lux per Day is ${luxPerDay}")
     if (solsticeState == "after") {
         noonIlluminance = noonIlluminance - luxPerDay
     }
@@ -562,6 +567,7 @@ def updateNoonIlluminance() {
     }
 
     illuminanceData.setNoonIlluminance(noonIlluminance)
+    logDebug("Updated Noon Illuminance is ${noonIlluminance}", 1)
 }
 
 // sync indoor illuminance to illuminance data
