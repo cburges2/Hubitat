@@ -17,14 +17,10 @@ metadata {
         capability "Switch"
 		capability "Actuator"
 
-        //attribute "display", "STRING"
         attribute "speed", "ENUM"
         attribute "switch", "ENUM"   
         attribute "offMinutes", "ENUM"
 
-
-		// Commands needed to change internal attributes of virtual device.
-        //command "setDisplay", ["STRING"]
         command "setSpeed", [[name:"setSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["off","low","medium","high"]]]
         command "on"
         command "off"
