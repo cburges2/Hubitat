@@ -11,7 +11,8 @@
 *   Three of the relays have been physically attached to supply voltage to the appropriate motor wires for low, medium and high.  
 *   The board I am using needs 5v usb, or 7-48v).  An external power supply may be needed if the required voltage is not avaialbe on the hood's board. 
 *
-*   Version 1.0 - 12/14/24
+*   Version 1.0 - 11/14/24
+*   Version 1.1 - 11/15/24 - Added optional stove light device which if added in prefrences, will turn on when the fan turns on
 **/
 
 definition (
@@ -93,12 +94,24 @@ lock
             )
         }
 
+        section("<b>Stove Hood Light</b>") {
+
+            input (
+              name: "stoveLight", 
+              type: "capability.switch", 
+              title: "Select Stove Hood Light Switch Device (optional)", 
+              required: false, 
+              multiple: false,
+              submitOnChange: true             
+            )
+        }
+
         section("<b>Fan Doubletap Switch</b>") {
 
             input (
               name: "fanSwitch", 
               type: "capability.switch", 
-              title: "Select Fan Doubletap Switch Device", 
+              title: "Select Fan Doubletap Switch Device (optional)", 
               required: false, 
               multiple: false,
               submitOnChange: true             
@@ -110,7 +123,7 @@ lock
             input (
               name: "fanSceneSwitch", 
               type: "capability.actuator", 
-              title: "Select Fan Scene Switch Device", 
+              title: "Select Fan Scene Switch Device (optional)", 
               required: false, 
               multiple: false,
               submitOnChange: true             
@@ -139,11 +152,23 @@ lock
             )
         }
 
+        if (stoveLight) {
+            section("") {
+                input (
+                    name: "useStoveLight", 
+                    type: "bool", 
+                    title: "<font style='font-size:14px; color:#1a77c9'>Turn On Stove Light with Fan On</font>", 
+                    required: false, 
+                    defaultValue: true
+                )
+            } 
+        }
+
         section("") {
             input (
                 name: "debugMode", 
                 type: "bool", 
-                title: "Enable logging", 
+                title: "<font style='font-size:14px; color:#1a77c9'>Enable logging</font>", 
                 required: true, 
                 defaultValue: false
             )
@@ -294,6 +319,7 @@ def fanPowerHandler(evt) {
         def timerMinutes = (settings?.autoOff).toInteger()
         logDebug("timerMinutes is ${timerMinutes}")
         if (settings?.useAutoOff) runIn(timerMinutes,turnFanOff)
+        if (stoveLight && useStoveLight) {stoveLight.on()}
     }
     if (evt.value == "on") {unschedule()}
     
