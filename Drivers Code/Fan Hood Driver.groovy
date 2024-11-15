@@ -80,17 +80,14 @@ def logsOff(){
 
 def setSpeed(speed) {
     logDebug "setSpeed(${speed}) was called"
-    if (speed == "off") {
-        off()
-    }
-    else if (speed == "on") {
-        on()
-    }
-    else if (speed == "low" || speed == "medium" || speed == "high") {       
-        if (device.currentValue("switch") == "off") {
-            autoTurnOff()
-        }
+    if (speed == "off") {off()}
+    else if (speed == "on") {on()}
+    else if (speed == "low" || speed == "medium" || speed == "high") {  
         sendEvent(name: "speed", value: speed, descriptionText: getDescriptionText("speed set to ${speed}"))     
+        if (device.currentValue("switch") == "off") {
+            sendEvent(name: "switch", value: "on", descriptionText: getDescriptionText("switch on"))
+            autoTurnOff()
+        }          
         state.speed = speed
     }
 }
