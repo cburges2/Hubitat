@@ -29,7 +29,6 @@ metadata {
 
 	preferences {
 		input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
-		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
         input name: "autoOff", type: "bool", description: "Automatically turn fan off after selected time.", title: "Enable Auto-Off",  defaultValue: false
     }
 }
@@ -39,13 +38,12 @@ def installed() {
 	log.warn "installed..." 
     device.updateSetting("txtEnable",[type:"bool",value:true])
     state.speed = "off"
-	initialize()
+	updated()
 }
 
 def updated() {
 	log.info "updated..."
 	log.warn "debug logging is: ${logEnable == true}"
-	log.warn "description logging is: ${txtEnable == true}"
 	if (logEnable) runIn(1800,logsOff)
 	initialize()
 }
@@ -98,12 +96,6 @@ def setSpeed(setpoint) {
             sendEvent(name: "switch", value: "on", descriptionText: getDescriptionText("switch on"))
         }
     }
-}
-
-def setOffInMin(min) {
-    on()
-    def sec = (min * 60).toInteger()
-    runIn(sec, autoFanOff)
 }
 
 private logDebug(msg) {
