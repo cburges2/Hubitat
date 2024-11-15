@@ -4,6 +4,7 @@
 	Copyright 2024 -> ChrisB 
 
     Version 1.0 - 11/14/24
+    Version 1.1 - 11/15/24 - Fixed timer not always being turned on
 
 */
 
@@ -61,14 +62,12 @@ def parse(String description) { noCommands("parse") }
 
 def on() {
     sendEvent(name: "switch", value: "on", descriptionText: getDescriptionText("switch on")) 
-    setSpeed(state?.speed)
-    if (autoOff) {
-        def secs = device.currentValue("offMinutes").toInteger() * 60
-        runIn(secs, off)
-    }
+    sendEvent(name: "speed", value: state?.speed, descriptionText: getDescriptionText("speed set to ${state?.speed}"))
+    autoTurnOff()
 }
 
 def off() {
+    state.speed = device.currentValue("speed")
     sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch off")) 
     sendEvent(name: "speed", value: "off", descriptionText: getDescriptionText("speed set to off"))
     unschedule()
@@ -79,22 +78,27 @@ def logsOff(){
 	device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
 
-def setSpeed(setpoint) {
-    logDebug "setSpeed(${setpoint}) was called"
-    if (setpoint == "off") {
-        state?.speed = device.currentValue("speed")
-        sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch off")) 
-        sendEvent(name: "speed", value: "off", descriptionText: getDescriptionText("speed set to off"))
+def setSpeed(speed) {
+    logDebug "setSpeed(${speed}) was called"
+    if (speed == "off") {
+        off()
     }
-    else if (setpoint == "on") {
-        sendEvent(name: "switch", value: "on", descriptionText: getDescriptionText("switch on")) 
-        sendEvent(name: "speed", value: state?.speed, descriptionText: getDescriptionText("speed set to ${state?.speed}")) 
-    } else {
-        sendEvent(name: "speed", value: setpoint, descriptionText: getDescriptionText("speed set to ${setpoint}"))
-        state.speed = setpoint
+    else if (speed == "on") {
+        on()
+    }
+    else if (speed == "low" || speed == "medium" || speed == "high") {       
         if (device.currentValue("switch") == "off") {
-            sendEvent(name: "switch", value: "on", descriptionText: getDescriptionText("switch on"))
+            autoTurnOff()
         }
+        sendEvent(name: "speed", value: speed, descriptionText: getDescriptionText("speed set to ${speed}"))     
+        state.speed = speed
+    }
+}
+
+def autoTurnOff() {
+    if (settings?.autoOff) {
+        def secs = device.currentValue("offMinutes").toInteger() * 60
+        runIn(secs, off)
     }
 }
 
