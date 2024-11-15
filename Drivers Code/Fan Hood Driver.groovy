@@ -10,13 +10,13 @@
 
 metadata {
 	definition (
-			name: "Fan Hood Driver",
-			namespace: "chrisb",
-			author: "Chris B"
+        name: "Fan Hood Driver",
+        namespace: "chrisb",
+        author: "Chris B"
 	) {
         capability "Fan Control"
         capability "Switch"
-		capability "Actuator"
+        capability "Actuator"
 
         attribute "speed", "ENUM"
         attribute "switch", "ENUM"   
