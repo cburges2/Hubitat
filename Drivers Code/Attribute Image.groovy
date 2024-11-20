@@ -11,25 +11,25 @@ v 1.0 - 11/19/24 - Save three images as attributes for use on dashboards
 metadata {
 	
 	definition (
-			name: "Attribute Image",
-			namespace: "hubitat",
-			author: "Chris B."			
+		name: "Attribute Image",
+		namespace: "hubitat",
+		author: "Chris B."			
 	) { 
 		capability "Actuator"
 
-        attribute "image1", "string"
+		attribute "image1", "string"
 		attribute "image2", "string"
+		attribute "image3", "string"
 		attribute "lastFile1", "string"
 		attribute "lastFile2", "string"
 		attribute "lastFile3", "string"
 
-        command "setImage1", ["string"]
+		command "setImage1", ["string"]
 		command "setImage2", ["string"]
 		command "setImage3", ["string"]
 	}
 
-	preferences {
-		
+	preferences {		
 		input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
 		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)      
 		input( name: "ipAddress", type:"STRING", title: "Enter Hub IP Address")  
