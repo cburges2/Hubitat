@@ -1,5 +1,5 @@
 /*
-	Virtual Thermostat Cycles 
+	Virtual Thermostat Cycles
     Version 1.0  2/10/24
 
     This Driver is for a virtual thermostat with Added Features 
@@ -23,6 +23,12 @@
 	- Tracks rise and fall changes to determine cycle highs and lows for calcs.  
 	- Cycles are counted.  If it takes more than two cycles to get to temp, cycle time is increased regardless of end temp.  
 	- Center the cycles around the setpoint by adjusting the cycle hysteresis based on averge of cycle high/low. 
+
+	Version 3.0 11/14/24
+	- Eliminated self adjusting cycles.  Default cycle time and default wait time is set in preferences, along with a coefficient. 
+	- All adjustments are now made from outside temp diferences from below heating temps (50 F), to above ac temps (70 F). 
+	- The coefficeint represnets how much of a change will be made to cycle time and wait time based on how cold or hot it is outside
+
 */
 
 import groovy.time.*
@@ -41,10 +47,10 @@ metadata {
         capability "Motion Sensor"
         capability "Presence Sensor"
 
-		attribute "supportedThermostatFanModes", "JSON_OBJECT"
-		attribute "supportedThermostatModes", "JSON_OBJECT"
+/* 		attribute "supportedThermostatFanModes", "JSON_OBJECT"
+		attribute "supportedThermostatModes", "JSON_OBJECT" */
 		attribute "hysteresis", "NUMBER"
-        attribute "stopHysteresis", "NUMBER"
+        attribute "targetHysteresis", "NUMBER"
         attribute "errorCheck", "ENUM"  // to do
         attribute "motion", "ENUM"      // motion is active with cool operatingState, inactive when heat/fan
         attribute "presence", "ENUM"    // presence is AC Status set from Webcore based on AC contact sensor status
@@ -56,21 +62,25 @@ metadata {
 		attribute "cycling", "ENUM"
 		attribute "cyclingHysteresis", "NUMBER"
         attribute "cycleState", "ENUM"
-		attribute "outsideTemp", "NUMBER"
+		attribute "outsideTemp", "STRING"
 		attribute "temperatureState", "ENUM"
 		attribute "cycleSeconds", "ENUM"
 		attribute "waitSeconds", "ENUM"
+		attribute "slope", "NUMBER"
+		attribute "autoMode", "ENUM"
+		attribute "fanSpeed", "ENUM"
+		attribute "display", "STIRNG"
 		//attribute ""
 
 		// Commands needed to change internal attributes of virtual device.
 		command "setTemperature", ["NUMBER"]
 		command "setThermostatOperatingState", ["ENUM"]
 		command "setThermostatSetpoint", ["NUMBER"]
-		command "setSupportedThermostatFanModes", ["JSON_OBJECT"]
-		command "setSupportedThermostatModes", ["JSON_OBJECT"]
-        command "setThermostatFanMode", [[name:"thermostatFanMode",type:"ENUM", description:"Thermo Fan Mode", constraints:["off","cool","fan"]]]
+ 		command "setSupportedThermostatFanModes", ["JSON_OBJECT"]
+		command "setSupportedThermostatModes", ["JSON_OBJECT"] 
+        command "setThermostatFanMode", [[name:"thermostatFanMode",type:"ENUM", description:"Thermo Fan Mode", constraints:["on","auto","circulate"]]]
         command "setHysteresis", ["NUMBER"]
-        command "setStopHysteresis", ["NUMBER"]
+        command "setTargetHysteresis", ["NUMBER"]
         command "setErrorCheck",[[name:"errorCheck",type:"ENUM", description:"AC Error Check", constraints:["true","false"]]]
         command "setContact",[[name:"contact",type:"ENUM", description:"Set AC on/off", constraints:["open","closed"]]]
         command "setMotion",[[name:"motion",type:"ENUM", description:"Set AC cooling on/off", constraints:["active","inactive"]]]
@@ -82,14 +92,19 @@ metadata {
 		command "setCycling",[[name:"cycling",type:"ENUM", description:"Cycling Heat", constraints:["true","false"]]]
 		command "setCyclingHysteresis", ["NUMBER"]
         command "setCycleState",[[name:"cycleState",type:"ENUM", description:"Cycling State", constraints:["Cycling","Ramping","Waiting"," "]]]
-		command "setOutsideTemp", ["NUMBER"]
-		command "resetCycleWait"
+		command "setOutsideTemp", ["STRING"]
+		command "stopCycleWait"
 		command "stopCycle"
 		command "initCycling"
 		command "manageCycle"
 		command "initCycling"
 		command "setCycleSeconds", ["ENUM"]
 		command "setWaitSeconds", ["ENUM"]
+		command "setCycleWait"
+		command "updateCycleSeconds"
+		command "setDisplay"
+        command "setAutoMode",[[name:"autoMode",type:"ENUM", description:"Auto Switchover Mode", constraints:["true","false"]]]
+		command "setFanSpeed",[[name:"fanSpeed",type:"ENUM", description:"AC Fan Speed", constraints:["low","medium","high"]]]
 		command "setTemperatureState",[[name:"temperatureState",type:"ENUM", description:"Rise/Fall State", constraints:["rising","rising steady","falling","falling steady"]]]
 	}
 
@@ -98,18 +113,18 @@ metadata {
 		input( name: "useACState", type:"bool", title: "Enable using AC State and Icon",defaultValue: false)
 		input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
 		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
-		input( name: "zoneType",type:"enum",title: "Zone Type", options:["Well Insulated","Normal","Drafty","Basement"], description:"Pick the type of Zone", defaultValue: "Normal")
-		input( name: "adjustCycleMinutes",type:"enum",title: "Adjust Cycle Minutes", options:["-10","-9","-8","-7","-6","-5","-4","-3","-2","-1","0","1","2","3","4","5","6","7","8","9","10"], description:"Lower if temp goes too high(heat)/low(cool) when cycling", defaultValue: 0)
-		input( name: "adjustIntervalMinutes",type:"enum",title: "Adjust Interval Minutes", options:["-10","-9","-8","-7","-6","-5","-4","-3","-2","-1","0","1","2","3","4","5","6","7","8","9","10"], description:"Lower if temp goes too low(heat)/high(cool) between cycles", defaultValue: 0)
-		input( name: "secondsPerTenths",type:"enum",title: "Adjust Cycle and Wait Seconds per tenths over/under target", options:["0","1","2","3","4","5","8","10","12","15","20","25","30","35","40","45"], description:"Change if cycles are over/under correcting", defaultValue: 20)
+		input( name: "cycleCoefficient",type:"enum",title: "Adjust Cycle Coefficient", options:["1","2","3","4","5","6","8","10","12","15","20","25","30","35","40","45","50"], description:"Lower if temp goes too high(heat)/low(cool) when cycling in colder or hotter weather", defaultValue: 0)
+		input( name: "defaultSeconds",type:"enum",title: "Default Cycle Seconds for Zone", options:["60","65","70","75","80","85","90","95","100","115","120","125","130","140","145","155","160","165","170","175","180","185","190","195","200","150","200","250","300","350","400","450","500","550","600","650","700","750","800","850","900","950","1000","1100","1150","1200","1250","1300","1350","1400","1450","1500"], description:"Decrease if temps going too far beyond target, Increase if short cycling", defaultValue: 200)
+		input(name: "defaultWait",type:"enum",title: "Default Wait Cycle Seconds for Zone", options:["100","105","110","115","120","125","130","140","145","155","160","165","170","175","180","185","190","195","200","150","200","250","300","350","400","450","500","550","600","650","700","750","800","850","900","950","1000","1100","1150","1200","1250","1300","1350","1400","1450","1500","1550","1650"], description:"Increase if heat cycling before sensing temp increase from a cycle", defaultValue: 120)
 	}
 }
 
 def installed() {
 	log.warn "installed..."
-
+	runIn(1,initCycling)
+	initAttributes()
+	initStates()
 	updated()
-	initialize()
 }
 
 def updated() {
@@ -118,15 +133,18 @@ def updated() {
 	log.warn "description logging is: ${txtEnable == true}"
 	if (logEnable) runIn(21600,logsOff)   // 6 hours
 
-	//state.numCycles = 1.0
+	//initCycling()
+	//initAttributes()
+	//initStates()
+	
+	initialize()
 
-	//runIn(1,initCycling)
 }
 
 def initialize() {
-	initAttributes()
-	initStates()
-	runIn(1,initCycling)
+
+	initCycling()
+	
 }
 
 def initAttributes() {
@@ -134,18 +152,21 @@ def initAttributes() {
 	sendEvent(name: "thermostatSetpoint", value: convertTemperatureIfNeeded(68.0,"F",1))
 	sendEvent(name: "heatingSetpoint", value: convertTemperatureIfNeeded(68.0,"F",1))
 	sendEvent(name: "coolingSetpoint", value: convertTemperatureIfNeeded(75.0,"F",1))
-	state.lastRunningMode = "heat"
-	updateDataValue("lastRunningMode", "heat")
 	setThermostatOperatingState("heat")
-	setSupportedThermostatFanModes(["auto","circulate","on"])
-	setSupportedThermostatModes(["auto", "cool",  "heat", "off"])
+	setSupportedThermostatFanModes([auto, circulate, on])
+	setSupportedThermostatModes([cool, heat, off])
 	thermoOff()
 	fanAuto()
-	setCyclingHysteresis(".08")
-	setStopHysteresis(".1")
+	setCyclingHysteresis("0.08")
+	setTargetHysteresis("0.1")
+	setHysteresis("0.2")
 	setCycling("false")
-	setCycleState("idle")
-	sendEvent(name: "hysteresis", value: (hysteresis ?: 0.5).toBigDecimal())    
+	setCycleState("idle")	
+	setPresence("off")
+	if (settings?.useAcState) {
+		setIconFile("ac-off")
+		setAcStatusIcon("off")
+	}
 }
 
 def initStates() {
@@ -153,74 +174,38 @@ def initStates() {
 	def temperature = device.currentValue("temperature").toBigDecimal()
 
 	// used for cycles
-	state.intervalSeconds = 0
+	state.waitSeconds = 0
 	state.cycleSeconds = 0
 
-	// set by prefs
-	state.setIntervalSeconds = 0
-	state.setCycleSeconds = 0
-
-	// calc loss
-	state.calcLoss = false
-	state.waitEndTemp = temperature
 	state.fallEndTemp = temperature
 	state.steadyFallTemp = temperature
 
 	// calc gain
-	state.calcGain = false
 	state.riseEndTemp = temperature
 	state.steadyRiseTemp = temperature
-	state.numCycles = 0.0
-
-	state.cycleinterval = 0
-	state.cycleMinutes = 0
 
 	// Cycle state flags
 	state.ramping = false
-	state.cyclingOn = false
-	state.cycleWait = false
-	state.overWait = false
+	state.cycling = false
+	state.waiting = false
+	state.numCycles = 0.0
 
 	// temp status
-	state.tempState = "falling"
+	state.tempState = "falling steady"
 	state.lastTemp = temperature
+	state.highStamp = 0
+	state.lowStamp = 0
 
-	state.calcCycleHysteresis = false
 	state.lastRunningMode = "idle"
+	state.heatFactor = 0
+	state.coolFactor = 0
 }
 
 def initCycling() {
 	logDebug("Calculating Cycle States")
 
-	setCyclingHysteresis(".08"); setStopHysteresis(".1")
-
-    state.intervalSeconds = state?.cycleInterval * 60
-	setIntervalSecondsAttrib(state?.intervalSeconds.toString())
-
-    // set cycle initial mins based on 32 degrees outside "Well Insulated","Normal","Drafty","Basement"
-	def cycleMins = 0
-	logDebug("zoneType is ${zoneType}")
-	if (zoneType == "Drafty") {cycleMins = 11; intervalMins = 9; setCyclingHysteresis(".08"); setStopHysteresis(".15")} 
-	else if (zoneType == "Normal") {cycleMins = 5; intervalMins = 8; setCyclingHysteresis(".08"); setStopHysteresis(".23")} 
-	else if (zoneType == "Well Insulated") {cycleMins = 3; intervalMins = 5; setCyclingHysteresis(".03"); setStopHysteresis(".18")} 
-	else if (zoneType == "Basement") {cycleMins = 2; intervalMins = 7; setCyclingHysteresis(".01"); setStopHysteresis(".16")} 
-
-	def cycleMinutes = (Math.ceil(cycleMins)).toInteger()	
-	def cycleSeconds = (Math.ceil(cycleMins) * 60).toInteger()
-
-	logDebug("Cycle Seconds are ${cycleSeconds}")
-
-	def intervalMinutes = (Math.ceil(intervalMins)).toInteger()
-	def intervalSeconds = (Math.ceil(intervalMins) * 60).toInteger()
-	logDebug("Interval Seconds are ${intervalSeconds}")
-
-	// set states
-	state.cycleMinutes = cycleMinutes
-	state.setCycleSeconds = cycleSeconds
-	state.setIntervalSeconds = intervalSeconds
-
-	// get these base values modified by change settings in prefrences
-	updateCycleSeconds()
+	setCycleSeconds((settings?.defaultSeconds).toInteger())
+	setWaitSeconds((settings?.defaultWait).toInteger())
 
 }
 
@@ -230,500 +215,8 @@ def setCycleSeconds(seconds) {
 }
 
 def setWaitSeconds(seconds) {
-	state?.intervalSeconds = seconds.toInteger()
+	state.waitSeconds = seconds.toInteger()
 	setWaitSecondsAttrib(seconds)
-}
-
-// use settings in prefrences to adjust cycle and interval times from cycle minutes defaults
-def updateCycleSeconds() {
-
-	// get current values
-	def setCycleSeconds = state?.setCycleSeconds
-	logDebug("Set Seconds is ${setCycleSeconds}")
-	def setIntervalSeconds = state?.setIntervalSeconds
-	logDebug("Set Interval is ${setIntervalSeconds}")
-
-	// get offset values
-	def cycleChangeSeconds = settings?.adjustCycleMinutes.toInteger() * 60
-	logDebug("Change Cycle Seconds is ${cycleChangeSeconds}")
-	def intervalChangeSeconds = settings?.adjustIntervalMinutes.toInteger() * 60
-	logDebug("Change Interval Seconds is ${intervalChangeSeconds}")
-
-	// update the seconds
-	def newCycleSeconds = setCycleSeconds + cycleChangeSeconds
-	logDebug("New Cycle Seconds is ${newCycleSeconds}")
-    def newIntervalSeconds = setIntervalSeconds + intervalChangeSeconds
-	logDebug("New Interval Seconds is ${newIntervalSeconds}")
-
-	// update states
-	state.cycleSeconds = newCycleSeconds
-	setCycleSecondsAttrib(newCycleSeconds.toString())
-	state.intervalSeconds = newIntervalSeconds
-	setWaitSecondsAttrib(newIntervalSeconds.toString())
-}
-
-// **************************** Mangage Cycle *********************************
-def manageCycle(){
-
-    def cyclingHysteresis = (device.currentValue("cyclingHysteresis").toBigDecimal())   // start cycle if falling temp, stop cycle if still rising
-	def coolingSetpoint = device.currentValue("coolingSetpoint").toBigDecimal()
-	def heatingSetpoint = device.currentValue("heatingSetpoint").toBigDecimal()
-	def temperature = (device.currentValue("temperature") ?: convertTemperatureIfNeeded(68.0,"F",1)).toBigDecimal()
-
-	def hysteresis = (device.currentValue("hysteresis")).toBigDecimal() // start ramp
-	def thermostatMode = device.currentValue("thermostatMode") ?: "off"
-
-	def highTarget = 0.0
-	def lowTarget = 0.0
-	def cycleTarget = 0.0
-	def lowLimit = 0.0
-
-	if (thermostatMode == "heat") {
-		highTarget = (heatingSetpoint + cyclingHysteresis)
-		lowTarget = (heatingSetpoint - hysteresis) + 0.05
-		cycleTarget = heatingSetpoint + cyclingHysteresis
-		lowLimit = lowTarget + 0.1
-	}
-	if (thermostatMode == "cool") {
-		highTarget= (coolingSetpoint - cyclingHysteresis)
-		lowTarget = (coolingSetpoint + hysteresis) - 0.05
-		cycleTarget = coolingSetpoint - cyclingHysteresis
-		lowLimit = lowTarget - 0.1
-	} 
-
-	def rising = state?.tempState == "rising" || state?.tempState == "rising steady"
-	def falling = state?.tempState == "falling" || state?.tempState == "falling steady"	
-
-	// CALC LOSS -only once after a wait 
-	if (state.calcLoss) {
-		logDebug("************* calcLoss Running **************")   
-/* 		logDebug("low Target is ${lowTarget}")
-		def waitEndTemp = state?.waitEndTemp
-		logDebug("Wait End Temp is ${waitEndTemp}")
-		def adjustWait = false
-		def endDiff = 0.0 */
-
-/* 		// Check if temp still below heating setpoint at end of wait (should be above)  ---?? keep?
-		if (waitEndTemp > cycleTarget && rising) { 
-			logDebug("Temperature under setpoint at wait end")
-
-			endDiff = heatingSetpoint - waitEndTemp
-			logDebug("Wait endDiff is ${endDiff}")
-
-			adjustWait = true
-		} */
-/*
-		// check if temp is below cycle point and falling (too long of a wait, cycle would have started otherwise)
-		if ((waitEndTemp < cycleTarget) && falling) { 
-			logDebug("Temperature under setpoint at wait end")
-
-			endDiff = cycleTarget - waitEndTemp
-			logDebug("Wait endDiff is ${endDiff}")
-
-			adjustWait = true
-		}
-
-		// Adjust wait time
-		if (adjustWait) {
-			def secPerTenth = secondsPerTenths.toBigDecimal()
-			logDebug("Seconds per tenth is ${secPerTenth}")
-
-			// find how many tenths we are off by and adjust by seconds per tenths
-			def numAdjust = endDiff / 0.1     
-			logDebug("numAdjust (diff /.1) is ${numAdjust}")
-			
-			def diffSec = numAdjust * secPerTenth
-			def diffSeconds = Math.round(diffSec)
-			def absDiff = Math.abs(diffSeconds)
-
-			if (absDiff <= 300) {
-				adjustWaitSeconds(diffSeconds)    // add to wait to get above setpoint
-			}
-		} */
-
-		state.calcLoss = false			
-	}
-
-	// CALC CYCLE HYSTERESIS - only once per cycle
-	if (state?.calcCycleHysteresis) {
- 		logDebug("************* calcCycleHysteresis Running **************")   
-
-		def endTemp = state?.fallEndTemp
-		def highTemp = state?.riseEndTemp
-		logDebug("Fall End Temp is ${endTemp}")
-		logDebug("Rise End Temp is ${highTemp}")
-
-		def avg = (highTemp + endTemp) / 2.0
-		def diff = 0.0
-		def update = false
-
-		if (thermostatMode == "heat") {
-			diff = heatingSetpoint - avg
-			update = true
-		}
-
-		if (thermostatMode == "cool") {
-			diff = coolingSetpoint + avg
-			update = true
-		}	
-
-		if (update) {
-			logDebug("Adjusting ${diff} degrees from cyclingHysteresis based on fall end temp")
-			def setHyst = device.currentValue("cyclingHysteresis").toBigDecimal()
-			def newHyst = setHyst + diff
-			logDebug("New Cycle Hysteresis is ${newHyst} degrees")
-
-			// Adjust Hysteresis
-			if (newHyst < 0.0) {newHyst = 0.0}
-			if (newHyst > 0.5) {newHyst = 0.3}
-			setCyclingHysteresis(newHyst)
-		}
-
-		state.calcCycleHysteresis = false
-	}	
-
-	// CALC GAIN - only once after a cycle - do not calc if it took two cycles to get above setpoint (low cycle), or if cyle was stopped above cycleHysteresis  
-	if (state?.calcGain) {
-		logDebug("************* calcGain Running **************")
-		state.calcGain = false
-		def count = state?.numCycles
-		logDebug("Cycle Count is ${count}")
-		state.numCycles = 0.0
-		//def shortCycle = state?.cycleStopped && count == 1.0
-		//if (!shortCycle) {		  								 //!state?.lowCycle && 				
-			logDebug("High Target is ${highTarget}")
-			def highTemp = state?.riseEndTemp
-			logDebug("Rise End Temp is ${highTemp}")
-
-			def highDiff = highTarget - highTemp
-			logDebug("highDiff is ${highDiff}")
-
-			def secPerTenth = secondsPerTenths.toBigDecimal()
-			logDebug("Seconds per tenth is ${secPerTenth}")
-					
-			// find how many tenths over we are and adjust by seconds per tenths
-			numAdjust = highDiff / 0.1     
-			logDebug("numAdjust (diff /.1) is ${numAdjust}")
-			
-			def diffSec = numAdjust * secPerTenth
-			logDebug("Calculated DiffSec is ${diffSec}")
-
-			def diffSeconds = Math.round(diffSec).toInteger()  // diff as int
-			def absDiff = Math.abs(diffSeconds)    // diff as positive value
-
-			// if multiple cycles needed, multiply by cycles it took to get to temp and double the limit
-			def adjustLimit = 600
-
-			// treat two cycles as one, but reduce difference a bit
-			if (count == 2 && diffSeconds > 60) {
-				diffSeconds = diffSeconds - 30
-				logDebug("Count was two: diffSeconds now ${diffSeconds}")
-			}
-
-			if (count > 2) {
-				logDebug("The cycle count is ${count}")
-				adjustLimit = 800
-				diffSeconds = (60.0 * (count - 1)).toInteger() // create a new difference for the extra cycles
-				logDebug("Multi-cycle diffSeconds is now ${diffSeconds}")
-			}					
-
-			if (absDiff > adjustLimit) {
-				if (diffSeconds > 0) {diffSeconds = adjustLimit.toInteger()}
-				else if (diffSeconds < 0) {(difSeconds = (0 - adjustLimit)).toInteger()}
-			}
-
-			// adjust
-			adjustCycleSeconds(diffSeconds)
-			adjustWaitSeconds(-30)   // adjust wait opposite of cycles
-			//state?.addToCycleSecs = diffSeconds
-			logDebug("Adjusting cycle time and wait time by ${diffSeconds} seconds based on target cycles")
-	}
-
-	def stopHysteresis = (device.currentValue("stopHysteresis").toBigDecimal())	// stop cycle
-	def thermostatOperatingState = device.currentValue("thermostatOperatingState") ?: "heat"
-
-    def ramping = false
-    def cyclingOn = false
-
-    def coolOn = coolingSetpoint + hysteresis
-    def heatOn = heatingSetpoint - hysteresis
-
-    def coolingOn = (temperature > coolOn) 
-    def heatingOn = (temperature < heatOn)	
-
-    def heatOff = heatingSetpoint + cyclingHysteresis
-    def coolOff = coolingSetpoint - hysteresis 
-    def cycleOn
-	def belowSetpoint
-
-	// ****** Set Cycling and Ramping Points ********
-	def wasRamping = state?.ramping	// save ramp state before it changes
-    // ** Set Cycling State **
-    if (thermostatMode == "cool") {
-        // cycle settings       
-        cycleOn = coolingSetpoint - cyclingHysteresis  // cycle setpoint
-        cyclingOn = (temperature > cycleOn && temperature <= coolOn && rising) || (temperature > coolingSetpoint && temperature < coolOn && rising)	
-        ramping = temperature > coolOn  // Check if rampting to temp
-		belowSetpoint = temperature > (coolingSetpoint + 0.1)
-    }
-    if (thermostatMode == "heat") {
-        // cycle settings
-        cycleOn = heatingSetpoint + cyclingHysteresis  // cycle setpoint
-        logDebug("cycleOn is ${heatingSetpoint + cyclingHysteresis}")
-        logDebug("temp is ${temperature}")
-        cyclingOn = (temperature < cycleOn && temperature >= heatOn && falling) || (temperature < heatingSetpoint && temperature > heatOn && falling)
-        ramping = temperature < heatOn  // Check if rampting to temp   
-		belowSetpoint = temperature < (heatingSetpoint - 0.1)
-    }
-	// set States to match
-	state.ramping = ramping
-	state.cyclingOn = cyclingOn	
-
-	// start ramp wait if just done ramping (two minute wait to check temp)
-	if (wasRamping && !ramping) {
-		logDebug("Ramping is done, setting wait")
-		setRampWait()
-	}
-
-	if (ramping) {heatingOn = true}
-
-	logDebug("Ramping is ${ramping}")
-	logDebug("Cycling On is ${cyclingOn}")
-
-    // cancel cycleWait when below setpoint and falling
-    if (state?.cycleWait && belowSetpoint && falling) {		// *****************?
-		logDebug("Stoping Wait, need to cycle at ${temperature} with temps falling")
-		state.overWait = true
-		// Bump up cycle time
-		adjustCycleSeconds(30)
-		resetCycleWait()   // allow another cycle to run	
-	}  																	
-    
-    // Start cycle if below cycle temp and not waiting or ramping
-    if (cyclingOn && !ramping && state?.cycleWait == false) {
-    	logDebug("OK to Cycle")	
-		if (device.currentValue("cycling") == "false") {
-			logDebug("Statring cycling with temp change")
-			startCycle()
-		}
-    }
-
-    def cycling = device.currentValue("cycling") == "true"
-
- 	// stop if cycling and at stop hysteresis with temp rising (heatOff is cycle point)
-	logDebug("Temp State is ${state?.tempState}")
-	def changeOK = falling
-	if (thermostatMode == "cooling") changeOK = rising
-	if (cycling && temperature >= heatOff) {  
-		logDebug("Stopping cycle at stop hysteresis while temp rising")
-		stopCycle()
-		cyclingOn = false                 		
-		cycling = false
-		// bump down cycle time
-		adjustCycleSeconds(-30)
-	} else if ((temperature >= heatOff) && thermostatOperatingState == "heating") {  // if heat is on even if not cycling?
-		heatingOn = false
-		stopCycle()
-		cyclingOn = false
-	}
-
-    logDebug("cycling is ${cycling}")   
-	def waitingState = device.currentValue("cycleState") == "Waiting"
-	logDebug("waiting is ${waitingState}")
-    
-	// if rise beyond cyclingOn point and cycling, stop.
-    if (!cyclingOn && cycling) {
-        logDebug("Stopping cycle at cycling setpoint")
-		stopCycle()
-    }
-
-	// if waiting, and temps less than or equal to heating setpoint, and falling, start a cycle
-	if (state?.cycleWait && falling && temperature <= heatingSetpoint) {
-		stopCycleWait()
-	}
-
-    // set cycleState attribute for dashboard
-	def cycleStateValue = device.currentValue("cycleState")
-	def newState = " "
-    if (ramping) {newState = "Ramping"}
-    else if (cycling) {newState = "Cycling"}
-    else if (state?.cycleWait == true) {newState = "Waiting"}
-	else newState = "Idle"
-	
-	if (!cycleStateValue.equals(newState)) {
-		logDebug("updateing cycleState to ${newState}")
-		setCycleState(newState)
-	}
-    
-
-    // Check cycle/ramping
-    if (cycling && !ramping) { 
-        if (thermostatMode == "heat") {
-            if (cyclingOn) {heatingOn = true}
-        } else if (thermostatMode == "cool") {
-            if (cyclingOn) {coolingOn = true}
-        }
-    } else if (heatingOn) {
-        if (thermostatMode == "heat" && ramping) heatingOn = (temperature <= heatingSetpoint - hysteresis)
-		if (thermostatMode == "heat" && temperature >= heatOff) heatingOn = false
-    } else if (coolingOn) {
-        if (thermostatMode == "cool" && ramping) coolingOn = (temperature >= coolingSetpoint + hysteresis)
-		if (thermostatMode == "cool" && temperature <= coolOff) coolingOn = false
-    }
-
-	if (temperature > (heatingSetpoint + stopHysteresis) && thermostatOperatingState == "heating")   // fail safe off
-	if (ramping && !heatingOn) {heatingOn = true}
-
-    // ***** Set Operating State ******
-    // Cool
-	if (thermostatMode == "cool") {
-        if (coolingOn && thermostatOperatingState != "cooling") {
-            setThermostatOperatingState("cooling")
-            sendEvent(name: "motion", value: "active", isStateChange: forceUpdate) 
-			on()    		
-        }    
-        else if (!coolingOn && thermostatOperatingState != "idle") {
-            setThermostatOperatingState("idle")
-            sendEvent(name: "motion", value: "inactive", isStateChange: forceUpdate)
-			off()
-        }
-    // Heat    
-	} else if (thermostatMode == "heat") {
-		if (heatingOn && thermostatOperatingState != "heating") {
-			setThermostatOperatingState("heating")
-            sendEvent(name: "contact", value: "closed", isStateChange: forceUpdate) 
-		}
-		else if (!heatingOn && thermostatOperatingState != "idle") {
-			setThermostatOperatingState("idle")
-            sendEvent(name: "contact", value: "open", isStateChange: forceUpdate) 
-		}
-    // Auto not implemented with cycling
-	} 
-}
-// ****************************************** End Mangage Cycle ***************************************************
-
-def startCycle() {
-	logDebug("Starting Cycle")
-	setCycling("true")
-	runIn(state?.cycleSeconds, stopCycle)
-}
-
-def stopCycle() {
-    logDebug("Ending Cycle")		
-    if (device.currentValue("cycling") == "true") {
-		if (state.numCycles < 5) {state.numCycles = state?.numCycles + 1.0}		
-		setCycling("false")
-		unschedule("stopCycle")
-		setCycleWait()
-		logDebug("Number of cycles at Stop Cycle is ${state?.numCycles}")
-	}
-
-    runIn(1,manageCycle)
-}
-
-// Start Another Cycle - check when when wait ?
-def restartCycle() {
-	def waiting = device.currentValue("cycleState") == "Waiting"
-	def state = device.currentValue("temperatureState")
-	def falling = (state == "falling") || (state == "falling steady")	
-	if (state?.cyclingOn && falling) {   // if cyclingOn and not waiting and not rising, start another cycle. 
-		startCycle()	
-		logDebug("Starting another Cycle...")		
-	}
-}
-
-def setCycleWait() {
-	logDebug("setting Cycle Wait")
-	state.cycleWait = true
-	runIn(1,manageCycle)    	
-	runIn(state?.intervalSeconds, stopCycleWait)  	
-}
-
-def setRampWait() {
-	logDebug("setting Ramp Wait")
-	state.cycleWait = true
-	runIn(1,manageCycle)    	
-	runIn(120, stopCycleWait)  	// may need another cycle
-}
-
-def stopCycleWait() {
-	logDebug("Resetting Cycle Wait")
-	unschedule("resetCycleWait")
-    state.cycleWait = false
-	setCycleState(" ")
-	state.calcLoss = true
-	runIn(1,manageCycle)
-}
-
-// Recheck to see if ramping is done if ramping
-def recheckCycleWait() {
-	runIn(1,setCycleWait)
-}
-
-// reset cycle wait if we do not get to cycle temp from ramp
-def resetCycleWait() {
-	logDebug("Resetting Cycle Wait")
-	unschedule("resetCycleWait")
-    state.cycleWait = false
-	setCycleState(" ")
-
-    runIn(1,manageCycle)
-}
-
-def setCycleState (value) {
-	logDebug "setCycleState(${value}) was called"
-	sendEvent(name: "cycleState", value: value, descriptionText: getDescriptionText("cycleState set to ${value}"))    
-}
-
-
-// cycleSeconds is used, setSeconds is set in init
-// intervalSeconds are used, cycleIntervalSeconds is set in init  
-// adjust cycle seconds based on auto adjust diff
-def adjustCycleSeconds(diff) {
-
-	def cycleSeconds = state?.cycleSeconds
-	logDebug("Cycle Seconds is ${cycleSeconds}")
-
-	def setpointChangeSecs = diff.toInteger()
-
-	def newSeconds = cycleSeconds + diff 
-	logDebug("New Seconds is ${newSeconds}")
-
-	def change = newSeconds - cycleSeconds
-
-	// limit a change to 200 seconds
-	if (change > 200.0) {
-		newSeconds = cycleSeconds + 200.0
-	} else if (change < -200 ) {
-		newSeconds = cycleSencods - 200.0
-	}
-
-	// limit the range that can be updated to
-	if (newSeconds < 30)  {newSeconds = 30}
-	if (newSeconds > 1200)  {newSeconds = 1200}
-
-	state.cycleSeconds = newSeconds
-	setCycleSecondsAttrib(newSeconds.toString())
-	logDebug("Changed Cycle is ${newSeconds}")
-}
-
-// adjust cycle seconds based on auto adjust diff
-def adjustWaitSeconds(diff) {
-
-    // set new interval seconds too for cycleWait
-	def interval = state?.intervalSeconds
-	logDebug("set Interval is ${interval}")
-
-    def newInterval = interval + diff.toInteger()
-
-	logDebug("New Interval is ${newInterval}")
-
-	if (newInterval < 300) {newInterval = 300}  // keep wait at at least 300 sec
-	if (newInterval > 750) {newInterval = 750}  // keep below 750
-  
-	state.intervalSeconds = newInterval
-	setWaitSecondsAttrib(newInterval.toString())
-	logDebug("Changed Interval is ${newInterval}")
 }
 
 def setCycleSecondsAttrib(value) {
@@ -732,6 +225,178 @@ def setCycleSecondsAttrib(value) {
 
 def setWaitSecondsAttrib(value) {
 	sendEvent(name: "waitSeconds", value: value, descriptionText: getDescriptionText("waitSeconds Atrribute set to ${value}"))	
+}
+
+String getAutoMode(coolPoint, heatPoint, temp, mode, hyst) {
+
+	def coolDemand = temp > coolPoint + hyst
+	def heatDemand = temp < heatPoint - hyst
+	def newMode = mode
+	logDebug("Heat Demand is ${heatDemand}")
+	logDebug("Cool Demand is ${coolDemand}")
+	logDebug("mode is ${mode}")
+
+
+	if (!(coolDemand && heatDemand)) {
+
+		if (coolDemand && mode == "heat") {
+			logDebug("Thermostat Mode changed to cool")
+			setThermostatMode("cool")
+			newMode = "cool"
+		}
+		if (heatDemand && mode == "cool") {
+			logDebug("Thermostat Mode changed to heat")
+			setThermostatMode("heat")
+			newMode = "heat"
+		}
+	} else {logDebug("Difference not in range for auto mode change")}
+	
+	return newMode
+}
+
+def setDisplay() {
+	String display = " "+device.currentValue("thermostatSetpoint")+"°"
+	sendEvent(name: "display", value: display, descriptionText: getDescriptionText("display set to ${display}"))
+
+}
+
+// **************************** Mangage Cycle *********************************
+def manageCycle(){
+	logDebug("Manage Cycle Running...")
+	def thermostatOperatingState = device.currentValue("thermostatOperatingState") ?: "heat"
+	def coolingSetpoint = device.currentValue("coolingSetpoint").toBigDecimal()
+	def heatingSetpoint = device.currentValue("heatingSetpoint").toBigDecimal()
+	def temperature = (device.currentValue("temperature") ?: convertTemperatureIfNeeded(68.0,"F",1)).toBigDecimal()
+	def hysteresis = (device.currentValue("hysteresis")).toBigDecimal() // start ramp
+	def thermostatMode = device.currentValue("thermostatMode") ?: "off"
+
+	// check auto changeover if autoMode true
+	if (device.currentValue("autoMode") == "true") {
+		logDebug("Auto Mode is true")
+		thermostatMode = getAutoMode(coolingSetpoint, heatingSetpoint, temperature, thermostatMode, hysteresis)
+	}
+
+    def cyclingHysteresis = (device.currentValue("cyclingHysteresis").toBigDecimal())   // start cycle if falling temp, stop cycle if still rising
+	def targetHysteresis = (device.currentValue("targetHysteresis").toBigDecimal())	// stop cycle
+
+	// cycle on points
+    def coolOn = coolingSetpoint - cyclingHysteresis
+    def heatOn = heatingSetpoint + cyclingHysteresis
+
+	// slope calc
+	def coolSlope = coolingSetpoint + targetHysteresis
+	def heatSlope = heatingSetpoint - targetHysteresis
+
+	// target cycle off points
+    def coolOff = coolingSetpoint - targetHysteresis
+    def heatOff = heatingSetpoint + targetHysteresis
+	
+	// ****** Set Ramping ********
+	def coolRamp = coolingSetpoint + hysteresis
+	def heatRamp = heatingSetpoint - hysteresis
+
+    // ** check ramping and cycling **
+	def wasRamping = state?.ramping	// save ramp state before it changes
+	def wasCycling = state?.cycling // save cycle state before it changes
+
+	def ramping = false  
+    def cycling = false
+	def demand = false
+	def wrongTrend = false
+	def madeTarget = false
+	//def wait = false
+	def overSetpoint = false
+
+	def rising = state?.tempState == "rising" || state?.tempState == "rising steady"
+	def falling = state?.tempState == "falling" || state?.tempState == "falling steady"		
+	logDebug("rising is ${rising}")
+	logDebug("falling is ${falling}")
+
+	// set flags for heat and cool settings (on = cyclingHyst, off = waitHyst, Ramp = hysteresis)
+    if (thermostatMode == "cool") {
+        ramping = temperature > coolRamp
+		cycling = (temperature > coolOn) && (temperature <= coolRamp) && rising
+		demand = temperature > coolingSetpoint
+		wrongTrend = rising	
+		madeTarget = temperature <= coolOn
+		calculateSlope = temperature <= coolSlope
+		overSetpoint = temperature <= coolOff
+    }
+    if (thermostatMode == "heat") {
+ 		ramping = temperature < heatRamp 
+		cycling = (temperature < heatOn) && (temperature >= heatRamp) && falling
+		demand = temperature < heatingSetpoint
+		wrongTrend = falling
+		madeTarget = temeprature >= heatOn
+		calculateSlope = temperature >= heatSlope
+		overSetpoint = temperature >= heatOff
+	}
+	
+ 	// set States to match
+	def waiting = state?.waiting
+	logDebug("Ramping Initial is ${ramping}")
+	logDebug("Cycling Initial is ${cycling}")	
+	state.cyclingOn = cycling	
+	state.ramping = ramping
+
+	logDebug("cycling is ${cycling}")   
+	logDebug("ramping is ${ramping}") 
+	logDebug("waiting is ${waiting}")
+
+	// set cycleState attribute
+	if (waiting && ramping) {
+		stopCycleWait()
+		waiting = false
+	}
+	updateCycleState(ramping, cycling, waiting)	
+
+	// Set demand need for state and cycle updates
+	def needCycle = (cycling || ramping) && state?.waiting == false
+	
+	logDebug("needCycle is ${needCycle}")   
+
+    // ***** Set Thermostat Operating State ******
+    // Cool
+	if (thermostatMode == "cool") {
+        if (needCycle && thermostatOperatingState != "cooling") {
+			startCoolCycle()
+        }    
+        else if (!needCycle && thermostatOperatingState != "idle") {
+			stopCoolCycle()
+        }
+    // Heat    
+	} else if (thermostatMode == "heat") {
+		if (needCycle && thermostatOperatingState != "heating") {
+			startHeatCycle()
+		}
+		else if (!needCycle && thermostatOperatingState != "idle") {			
+			stopHeatCycle()
+		}
+    // Auto not implemented with cycling
+	} 
+}
+// ****************************************** End Mangage Cycle ***************************************************
+// ******************************************                   ***************************************************
+
+
+// set cycleState attribute for dashboard
+def updateCycleState(ramping, cycling, waiting) {
+	logDebug("updateCycleState called with Ramping: ${ramping}, Cycing: ${cycling}")
+	logDebug("state.waiting is ${state?.waiting}")
+
+	if (cycling && waiting) {cycling = false}
+	if (ramping && waiting) {waiting = false}
+
+	def cycleStateValue = device.currentValue("cycleState")
+	def newState = " "
+    if (ramping) {newState = "Ramping"}
+    else if (cycling) {newState = "Cycling"}
+    else if (waiting) {newState = "Waiting"}
+	else newState = "Idle"	
+	if (!cycleStateValue.equals(newState)) {
+		logDebug("updateing cycleState to ${newState}")
+		setCycleState(newState)
+	}
 }
 
 // Set Temperature Rise Fall
@@ -746,11 +411,12 @@ def setTempState(temp) {
 
 	if (temp < lastTemp) {						// temps falling	
 		logDebug("Temp Decreased")	
-		//tempState = "falling"
+		tempState = "falling"
 		if (lastTempState == "falling steady") {
 			tempState = "falling"
 			state.riseEndTemp = state?.steadyFallTemp  // temp to use for 
-			state.calcGain = true	
+			Date now = new Date()
+			state.highStamp = now.getTime()
 			logDebug("Flag set to Calc Gain")
 		}
 		if (lastTempState == "rising") {
@@ -763,12 +429,13 @@ def setTempState(temp) {
 	}
 	if (temp > lastTemp) {						// temps rising
 		logDebug("Temp Increased")	
-		//tempState = "rising"
+		tempState = "rising"
 		if (lastTempState == "rising steady") {
 			tempState = "rising"	
 			state.fallEndTemp = state?.steadyRiseTemp	
-			state.calcCycleHysteresis = true
-			logDebug("Set Flag to Calc Hysteresis")
+			Date now = new Date()
+			state.lowStamp = now.getTime()
+			logDebug("Set Flag to Calc Loss")
 		}
 		if (lastTempState == "falling" ) {
 			tempState = "rising steady"
@@ -783,8 +450,172 @@ def setTempState(temp) {
 	if (tempState != "steady") {
 		state?.tempState = tempState   // if steady, it didn't update correctly
 		setTemperatureState(tempState)
+		logDebug("temperatureState is ${tempState}")	
 	}
-	logDebug("temperatureState is ${tempState}")	
+}
+
+def setOutsideTemp(value) {
+	logDebug "setOutsideTemp(${value}) was called"
+	sendEvent(name: "outsideTemp", value: value, descriptionText: getDescriptionText("outsideTemp set to ${value}"))
+
+
+    //def mode = device.currentValue("thermostatMode")
+	logDebug("Mode is ${mode}")
+	def outTemp = Float.valueOf(value)
+	state.outTemp = outTemp
+
+	adjustFactors(outTemp)
+
+}
+
+def adjustFactors(outTemp) {
+	def mode = device.currentValue("thermostatMode")
+
+	if (mode == "cool") {		
+		def over70 = outTemp - 70.0   // degrees over 70
+		logDebug("over70 is ${over70}")
+		
+		if (over70 > 0.0) {
+			def factor = Math.round(over70 * Float.valueOf(settings?.cycleCoefficient))
+			logDebug("factor is ${factor}")
+
+			state.coolFactor = factor
+			logDebug("cool factor is ${state?.coolFactor}")
+
+			updateCycleSeconds(factor)
+			updateWaitSeconds(factor)
+			runIn(1,manageCycle)
+		} else {state.coolFactor = 0}
+	}
+	if (mode == "heat") {		
+		def underHeat = 50.0 - outTemp  // degrees under 50
+		logDebug("underHeat is ${underHeat}")
+		def cycle = Float.valueOf(settings?.cycleCoefficient.toInteger())
+		
+		if (underHeat > 0.0) {
+			def factor = Math.round(underHeat * cycle)
+	
+			logDebug("factor is ${factor}")
+
+			state.heatFactor = factor
+			logDebug("heat factor is ${state?.heatFactor}")
+
+			updateCycleSeconds(factor)
+			updateWaitSeconds(factor)
+			runIn(1,manageCycle)
+		} else {state.heatFactor = 0}		
+	}
+
+}
+
+def updateCycleSeconds(factor) {
+	logDebug("updateCycleSeconds called with factor ${factor}")
+
+	// calculate new cycle seconds using pref coefficient
+	def cycle = settings?.cycleCoefficient.toInteger()		
+	logDebug("cycle coefficient is ${cycle}")
+
+	def seconds = settings?.defaultSeconds.toInteger()
+	logDebug("default seconds is ${seconds}")
+	cycle = seconds + factor	
+	logDebug("cycle seconds changed to ${cycle}")
+
+	if (cycle < seconds) {cycle = seconds}
+	if (cycle > 1200) {cycle = 1200}  	
+
+	// set cycle seconds values
+	state.newCycleSeconds = cycle
+	setCycleSeconds(cycle)
+}
+
+// update cycle seconds based on outside temp factor
+def updateWaitSeconds(factor) {
+
+    // set new interval seconds too for cycleWait
+	def interval = settings?.defaultWait.toInteger()
+	//def interval = state?.waitSeconds
+	logDebug("set Interval is ${interval}")
+
+    def newInterval = interval - factor
+
+	logDebug("New Interval is ${newInterval}")
+
+	if (newInterval < interval) {newInterval = 120}  // keep wait at room setting
+	if (newInterval > 950) {newInterval = 950}  // keep below 950
+  
+	state.waitSeconds = newInterval
+	setWaitSeconds(newInterval)
+	logDebug("Changed Interval is ${newInterval}")
+}
+
+def startHeatCycle() {
+	def waiting = state?.waiting
+	if (!waiting) {
+		logDebug("Heating Cycle Started")
+		setThermostatOperatingState("heating")
+		sendEvent(name: "contact", value: "closed", isStateChange: forceUpdate) 		
+		state.cycling = true
+		def cycleOff = state?.cycleSeconds
+		if (state?.ramping == false) {runIn(cycleOff,setCycleWait)}
+	}
+}
+
+def startCoolCycle() {
+	logDebug("Cooling Cycle Started")
+	setThermostatOperatingState("cooling")
+	sendEvent(name: "motion", value: "active", isStateChange: forceUpdate) 
+	on()   
+	def cycleOff = state?.cycleSeconds
+	state.cycling = true
+	if (state?.ramping == false) {runIn(cycleOff,setCycleWait)}
+}
+
+def stopHeatCycle() {
+	logDebug("Heating Cycle Ended")
+	setThermostatOperatingState("idle")
+	state.cycling = false
+	sendEvent(name: "contact", value: "open", isStateChange: forceUpdate) 
+}
+
+def stopCoolCycle() {
+	logDebug("Cooling Cycle Ended")
+	setThermostatOperatingState("idle")
+	state.cycling = false
+	sendEvent(name: "motion", value: "inactive", isStateChange: forceUpdate)
+	off()
+}
+
+def setCycleWait() {
+	logDebug("setting Cycle Wait")
+	state.waiting = true
+	state.cycling = false		
+	def waitSecs = (state?.waitSeconds)
+	runIn(waitSecs, stopCycleWait)  	// may need another cycle
+	runIn(1,manageCycle)  
+}
+
+def stopCycleWait() {
+	logDebug("Resetting Cycle Wait")
+	unschedule("resetCycleWait")
+    state.waiting = false
+	setCycleState(" ")
+	unschedule(stopCycleWait)
+	setCycleState("Idle")
+	runIn(1,manageCycle)
+}
+
+def stopCycle() {
+    logDebug("Ending Cycle")		
+    if (device.currentValue("cycling") == "true") {
+		setCycling("false")
+		setCycleWait()
+	}
+    runIn(1,manageCycle)
+}
+
+def setCycleState(value) {
+	logDebug "setCycleState(${value}) was called"
+	sendEvent(name: "cycleState", value: value, descriptionText: getDescriptionText("cycleState set to ${value}"))    
 }
 
 // not implemented - check if AC is in state it should be
@@ -803,23 +634,16 @@ def setTemperature(temperature) {
 	setTempState(temp)
 
 	runIn(1, manageCycle)
+	runIn(2, setDisplay)
 }
 
 def setTemperatureState(value) {
 	sendEvent(name: "temperatureState", value: value, descriptionText: getDescriptionText("temperatureState set to ${value}"))	
 }
 
-def setOutsideTemp(value) {
-	logDebug "setOutsideTemp(${value}) was called"
-	sendEvent(name: "outsideTemp", value: value, descriptionText: getDescriptionText("outsideTemp set to ${value}"))
-	runIn(1,manageCycle)
-}
-
 def setCyclingHysteresis(value) {
 	logDebug "setCyclingHysteresis(${value}) was called"
 	sendEvent(name: "cyclingHysteresis", value: value, descriptionText: getDescriptionText("cyclingHysteresis set to ${value}"))
-	//def stop = (value.toBigDecimal() + 0.15).toString()
-	//setStopHysteresis(stop)
 }
 
 // Commands needed to change internal attributes of virtual device.
@@ -827,6 +651,16 @@ def setCycling(value) {
 	logDebug "setCycling(${value}) was called"
 	sendEvent(name: "cycling", value: value, descriptionText: getDescriptionText("cycling set to ${value}"))
 	runIn(3, manageCycle)
+}
+
+def setAutoMode(value) {
+	logDebug "setAutoMode(${value}) was called"
+	sendEvent(name: "autoMode", value: value, descriptionText: getDescriptionText("autoMode was set to ${value}"))
+}
+
+def setFanSpeed(value) {
+	logDebug "setFanSpeed(${value}) was called"
+	sendEvent(name: "fanSpeed", value: value, descriptionText: getDescriptionText("fanSpeed was set to ${value}"))
 }
 
 def setOperatingBrightness(value) {
@@ -846,7 +680,6 @@ def setHumidity(humidity) {
 
 def setThermostatOperatingState (operatingState) {
 	logDebug "setThermostatOperatingState (${operatingState}) was called"
-	updateSetpoints(null,null,null,operatingState)
 	sendEvent(name: "thermostatOperatingState", value: operatingState, descriptionText: getDescriptionText("thermostatOperatingState set to ${operatingState}"))
 }
 
@@ -866,9 +699,9 @@ def setHysteresis(value) {
 	sendEvent(name: "hysteresis", value: value, descriptionText: getDescriptionText("hysteresis set to ${value}"))
 }
 
-def setStopHysteresis(value) {
-	logDebug "setStopHysteresis(${value}) was called"
-	sendEvent(name: "stopHysteresis", value: value, descriptionText: getDescriptionText("stopHysteresis set to ${value}"))
+def setTargetHysteresis(value) {
+	logDebug "setTargetHysteresis(${value}) was called"
+	sendEvent(name: "targetHysteresis", value: value, descriptionText: getDescriptionText("targetHysteresis set to ${value}"))
 }
 
 def setErrorCheck(value) {
@@ -923,7 +756,7 @@ def turnOn() {
   on()
 }
 
-def auto() { setThermostatMode("auto") }
+//def auto() { setThermostatMode("auto") }
 
 def cool() { setThermostatMode("cool") }
 
@@ -934,8 +767,7 @@ def thermoOff() { setThermostatMode("off") }
 
 def setThermostatMode(mode) {
 	sendEvent(name: "thermostatMode", value: "${mode}", descriptionText: getDescriptionText("thermostatMode is ${mode}"))
-	setThermostatOperatingState ("heat")
-	updateSetpoints(null, null, null, mode)
+	updateThermostatSetpoint(mode)
 	runIn(1, manageCycle)
 }
 
@@ -953,22 +785,25 @@ def setThermostatFanMode(fanMode) {
 	sendEvent(name: "thermostatFanMode", value: "${fanMode}", descriptionText: getDescriptionText("thermostatFanMode is ${fanMode}"))
 }
 
+def updateThermostatSetpoint(mode) {
+	if (mode == "cool") {setThermostatSetpoint(device.currentValue("coolingSetpoint"))}
+	if (mode == "heat") {setThermostatSetpoint(device.currentValue("heatingSetpoint"))}
+}
+
 def setThermostatSetpoint(setpoint) {   
 	logDebug "setThermostatSetpoint(${setpoint}) was called"
-	updateSetpoints(setpoint, null, null, null)
+	updateSetpoints(setpoint, null, null)
 }
 
 def setCoolingSetpoint(setpoint) {
 	logDebug "setCoolingSetpoint(${setpoint}) was called"
-	updateSetpoints(null, null, setpoint, null)
-	runIn(1,initCycling)
+	updateSetpoints(null, null, setpoint)
 	runIn(3, manageCycle)
 }
 
 def setHeatingSetpoint(setpoint) {
 	logDebug "setHeatingSetpoint(${setpoint}) was called"	
-	updateSetpoints(null, setpoint, null, null)
-	//runIn(1,initCycling)
+	updateSetpoints(null, setpoint, null)
 	runIn(1, manageCycle)
 }
 
@@ -992,56 +827,37 @@ def setAcStatusIcon(img) {
     }
 }
 
-private updateSetpoints(sp = null, hsp = null, csp = null, operatingState = null){
-	if (operatingState in ["off"]) return
+private updateSetpoints(sp = null, hsp = null, csp = null) {
+
 	if (hsp == null) hsp = device.currentValue("heatingSetpoint",true)
 	if (csp == null) csp = device.currentValue("coolingSetpoint",true)
-	if (sp == null) sp = device.currentValue("thermostatSetpoint",true)
-
-	if (operatingState == null) operatingState = state.lastRunningMode
+	def thermostatMode = device.currentValue("thermostatMode",true)
 
 	def hspChange = isStateChange(device,"heatingSetpoint",hsp.toString())
 	def cspChange = isStateChange(device,"coolingSetpoint",csp.toString())
-	def spChange = isStateChange(device,"thermostatSetpoint",sp.toString())
-	def osChange = operatingState != state.lastRunningMode
+	def spChange
+	if (sp == null) {spChange = false}
+	else {spChange == true}
+	logDebug("cspChange is ${cspChange}")
 
-	def newOS
 	def descriptionText
 	def name
 	def value
 	def unit = "°${location.temperatureScale}"
-	switch (operatingState) {
-		case ["pending heat","heating","heat"]:
-			newOS = "heat"
-			if (spChange) {
-				hspChange = true
-				hsp = sp
-			} else if (hspChange || osChange) {
-				spChange = true
-				sp = hsp
-			}
-			if (csp - 2 < hsp) {
-				csp = hsp + 2
-				cspChange = true
-			}
-			break
-		case ["pending cool","cooling","cool"]:
-			newOS = "cool"
-			if (spChange) {
-				cspChange = true
-				csp = sp
-			} else if (cspChange || osChange) {
-				spChange = true
-				sp = csp
-			}
-			if (hsp + 2 > csp) {
-				hsp = csp - 2
-				hspChange = true
-			}
-			break
-		default :
-			return
+
+	if (hspChange) {
+		if (thermostatMode == "heat") {
+			sp = hsp
+			spChange = true
+		}
 	}
+
+	if (cspChange) {
+		if (thermostatMode == "cool") {
+			sp = csp
+			spChange = true
+		}	
+	}		
 
 	if (hspChange) {
 		value = hsp
@@ -1053,6 +869,7 @@ private updateSetpoints(sp = null, hsp = null, csp = null, operatingState = null
 	if (cspChange) {
 		value = csp
 		name = "coolingSetpoint"
+		logDebug("coolingSetpoint is ${value}")
 		descriptionText = "${device.displayName} ${name} was set to ${value}${unit}"
 		if (txtEnable) log.info descriptionText
 		sendEvent(name: name, value: value, descriptionText: descriptionText, unit: unit, stateChange: true)
@@ -1065,9 +882,7 @@ private updateSetpoints(sp = null, hsp = null, csp = null, operatingState = null
 		sendEvent(name: name, value: value, descriptionText: descriptionText, unit: unit, stateChange: true)
         runIn(1, manageCycle)
 	}
-
-	state.lastRunningMode = newOS
-	updateDataValue("lastRunningMode", newOS)
+	runIn(1, setDisplay)
 }
 
 def setSchedule(schedule) {
