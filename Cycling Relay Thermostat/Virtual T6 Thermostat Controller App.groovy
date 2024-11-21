@@ -112,6 +112,61 @@ def mainPage() {
             )        
         } 
 
+        section("<b>Living Room AC Switch</b>") {
+            input (
+                name: "acSwitch", 
+                type: "capability.switch",
+                title: "Select Living Room AC Switch Device", 
+                required: false, 
+                multiple: false,
+                submitOnChange: true
+            )        
+        }
+
+        section("<b>Living Room AC Fan Switch</b>") {
+            input (
+                name: "acFanSwitch", 
+                type: "capability.switch",
+                title: "Select Living Room AC Fan Switch Device", 
+                required: false, 
+                multiple: false,
+                submitOnChange: true
+            )        
+        }
+
+        section("<b>Living Room AC Status</b>") {
+            input (
+                name: "acStatusSwitch", 
+                type: "capability.switch",
+                title: "Select Living Room AC Status Switch Device", 
+                required: false, 
+                multiple: false,
+                submitOnChange: true
+            )        
+        }
+
+        section("<b>Living Room AC Fan Status</b>") {
+            input (
+                name: "acFanStatusSwitch", 
+                type: "capability.switch",
+                title: "Select Living Room AC Fan Status Switch Device", 
+                required: false, 
+                multiple: false,
+                submitOnChange: true
+            )        
+        }
+
+        section("<b>Living Room AC Fan Button</b>") {
+            input (
+                name: "acFan", 
+                type: "capability.pushableButton",
+                title: "Select Living Room AC Fan Button Device", 
+                required: false, 
+                multiple: false,
+                submitOnChange: true
+            )        
+        }        
+
         section("<b>Outdoor Temperature Sensor</b>") {
             input (
                 name: "outdoorSensor", 
@@ -256,6 +311,9 @@ def updated() {
     //state.tempState = "falling"
     unsubscribe()
     unschedule()
+
+    state.fanState = "off"
+
     initialize()
 }
 
@@ -282,10 +340,12 @@ def initialize() {
 
     state.physicalThermoState = physicalThermostat.currentValue("thermostatOperatingState")
 
-    //subscribe(outdoorSensor, "temperature", outdoorTempHandler)
+    subscribe(outdoorSensor, "temperature", outdoorTempHandler)
 
     if (state?.useFan) subscribe(fanSwitch, "switch", fanSwitchHandler)
     if (state?.useHeatSwitch) subscribe(heatOnDevice, "switch", heatSwitchHandler)
+
+    //if (asSwitch) subscribe(acSwitch, "switch", fanSwitchHandler)
 
     // sync the external temp sensor to thermostat
     subscribe(tempSensor, "temperature", externalTempHandler)
@@ -301,6 +361,8 @@ def initialize() {
     }
 
     state.lastOperatingState = physicalThermostat.currentValue("thermostatOperatingState")
+
+    state.fanState = "off"
 
     runIn(1,checkStates)
 }
@@ -319,8 +381,14 @@ def virtualFanModeHandler(evt) {
 
     if (mode == "auto") {setCycleStateFan(cycleState)}
     if (mode == "circulate") {mode = "on"}
-    if (mode == "on") {fanSwitchOn()}
-
+    if (mode == "on") {
+        if (physicalThermostat.getLabel() == "Living Room Thermostat") {
+            fanSwitchOn()
+        }
+        if (physicalThermostat.getLabel() == "Bedroom Thermostat") {
+            //acSwitchOn()
+        }        
+    }
 }
 
 // Turn on fan switch with Wait Cycle or Ramping
@@ -450,6 +518,7 @@ def checkStates() {
     def virtualState = virtualThermostat.currentValue("thermostatOperatingState") 
     Float virtualTemp = new Float(virtualThermostat.currentValue("temperature"))
     Float physicalTemp = new Float(physicalThermostat.currentValue("temperature"))  
+    logDebug("Virtual Mode is ${virtualMode}")
 
     if (virtualMode == "heat") {
         if (physicalMode != "heat") {physicalThermostat.setThermostatMode("heat")}
@@ -503,14 +572,33 @@ def checkStates() {
         }        
     }
     if (virtualMode == "cool") {
+        logDebug("Virtual Mode is ${virtualMode}")
         if (physicalMode != "cool") {physicalThermostat.setThermostatMode("cool")}
         if (heatRelay.currentValue("switch") == "on") {heatRelay.off()}  // confirm a valve not left on from heating cycle
+        // Bedroom
         if (physicalThermostat.getLabel() == "Bedroom Thermostat") {
             def acState = virtualThermostat.currentValue("presence")
             if (virtualState == "cooling" && acState != "cool") {fanSwitch.setCool()} // cool
             else if (virtualState != "cooling" && acState == "cool") {fanSwitch.setFan()} // fan
         }
+        // Living Room
+        if (physicalThermostat.getLabel() == "Living Room Thermostat") {
+            logDebug("Checking Living Room Thermostat State")
+            def acState = acStatusSwitch.currentValue("switch") 
+            def acFanState = acFanStatusSwitch.currentValue("switch")
+            def switchState = acSwitch.currentValue("switch")
+            logDebug("${acState},${acFanState},${switchState}")
+            if (virtualState == "cooling" && acState == "off") {
+                logDebug("Turning AC Switch On")
+                acSwitch.on()
+            } 
+            else if (virtualState != "cooling" && (switchState == "on" || acState == "on") && acFanState == "off") {  //
+                logDebug("Turning AC Switch Off")
+                acSwitch.off()              // totally off                          
+            }             
+        }
 
+        // match thermo display to virtual temp
         if (heatRelay.currentValue("switch") == "on") {heatRelay.off()}
 
         logDebug("Checking Cool")
@@ -518,7 +606,8 @@ def checkStates() {
         def tempInt = Math.round(virtTemp)
         logDebug("tempInt is ${tempInt}")
         
-        def pTemp = physicalTemp.intValue()
+        def pAdjusted = physicalTemp + 1.1  // zwave mode themo reads higher than reported zwave temp
+        def pTemp = pAdjusted.intValue()  
         logDebug("pTemp is ${pTemp}")
 
         if (pTemp > tempInt) {
@@ -539,6 +628,13 @@ def checkStates() {
     restartCheckTimer() // repeat timer
 }
 
+def acSwitchOff() {
+    acSwitch.off()
+    acFanSwitch.off()
+    acFanStatusSwitch.off()
+    acStatusSwitch.off()
+}
+
 // virtual operating state changed - so update state and push physical cal or flip relay if engaged
 def virtualStateHandler(evt) {
 
@@ -551,6 +647,7 @@ def virtualStateHandler(evt) {
     if (engageRelays) {relaysDisengaged = engageRelays.currentValue("switch") == "off"}
     logDebug("Relays Disengaged = ${relaysDisengaged}")
     def thermostatMode = virtualThermostat.currentValue("thermostatMode")
+    def thermo = physicalThermostat.getLabel()
 
     // check if changed (not equal to current state)
     if (state?.virtualThermoState != virtualState) {
@@ -595,22 +692,47 @@ def virtualStateHandler(evt) {
             }
         }
         if (thermostatMode == "cool") {
-
             if (virtualState == "cooling") {
                 state.onByThermo1 = true
                 logDebug("Virtual Started Cooling")
                 
                 // Turn on other devices' switch with heat (with delay)
                 physicalThermostat.IdleBrightness(operatingBrightness)
-      
-                fanSwitch.setCool()/  / cool
+
+                // Bedroom
+                if (thermo == "Bedroom Thermostat") {
+                    def acState = virtualThermostat.currentValue("presence")
+                    if (acState != "cool") {fanSwitch.setCool()} // cool
+                }   
+                // Living Room
+                if (thermo == "Living Room Thermostat")  {
+                    def acState = acStatusSwitch.currentValue("switch")                    
+                    if (acState == "off") {
+                        acSwitch.on()
+                        unschedule("acSwitchOff")
+                    }
+                }                
             }
+           
             if (virtualState == "idle" || virtualState == "fan only") {
                 logDebug("Virtual Finished Cooling")
              
                 physicalThermostat.IdleBrightness(idleBrightness) 
 
-                fanSwitch.setFan()  // fan
+                if (thermo == "Bedroom Thermostat") {
+                    def acState = virtualThermostat.currentValue("presence")
+                    def acFanState = acFanStatusSwitch.currentValue("switch")
+                    if (acState != "fan") {fanSwitch.setFan()} // fan
+                }
+                // Living Room
+                if (thermo == "Living Room Thermostat") {
+                    def acState = acStatusSwitch.currentValue("switch") 
+                    def acFanState = acFanStatusSwitch.currentValue("switch")
+                    if (acState == "on" && acFanState == "off") {                   
+                        acFanSwitch.on()               // fan for ramp down
+                        runIn(180,acSwitchOff)         // totally off in 3 min
+                    }
+                }                       
             }
         }
 
@@ -751,13 +873,9 @@ def physicalThermoHeatPointHandler(evt) {
     def newHeatPoint = value.substring(0,2).toInteger() 
 
     def virtual = virtualThermostat.currentValue("heatingSetpoint").toInteger()
-    def virtualMode = virtualThermostat.currentValue("thermostatMode").toInteger()
-
-    if (evt.isPhysical()) {  
-        logDebug("Heat point change is physical")  
-        if (virtual != newHeatPoint && virtualMode == "heat") {
-            virtualThermostat.setHeatingSetpoint(newHeatPoint)
-        }
+    def virtualMode = virtualThermostat.currentValue("thermostatMode")
+    if (virtual != newHeatPoint && virtualMode == "heat") {
+        virtualThermostat.setHeatingSetpoint(newHeatPoint)
     }
 }
 
@@ -766,21 +884,20 @@ def physicalThermoCoolPointHandler(evt) {
     def value = evt.value
     def newCoolPoint = value.substring(0,2).toInteger() 
     def virtualCool = virtualThermostat.currentValue("coolingSetpoint").toInteger()
-    def virtualMode = virtualThermostat.currentValue("thermostatMode").toInteger()
+    def virtualMode = virtualThermostat.currentValue("thermostatMode")
 
-    if (evt.isPhysical()) {
-        logDebug("Cool point change is physcial")
-        if ((virtualCool != newCoolPoint) && virtualMode == "cool") {
-            virtualThermostat.setCoolingSetpoint(newCoolPoint) 
-            logDebug("virtual cool point updated")
-        }
+    logDebug("Cool point change is physcial")
+    if ((virtualCool != newCoolPoint) && virtualMode == "cool") {
+        virtualThermostat.setCoolingSetpoint(newCoolPoint) 
+        logDebug("virtual cool point updated")
     }
 }
 
 def virtualThermoCoolPointHandler(evt) {
     logDebug("Virtual Cool Point Handler Event = ${evt.value}")
-    def newCoolPoint = evt.value.toInteger()
-    def physciallMode = physcialThermostat.currentValue("thermostatMode").toInteger()
+    def value = evt.value
+    def newCoolPoint = value.substring(0,2).toInteger() 
+    def physicalMode = physicalThermostat.currentValue("thermostatMode")
     def physical = physicalThermostat.currentValue("coolingSetpoint").toInteger()
 
     if (phsyical != newCoolPoint && physicalMode == "cool") {
@@ -795,8 +912,7 @@ def virtualThermoHeatPointHandler(evt) {
 
     def newHeatPoint = evt.value.toInteger()
     def physical = physicalThermostat.currentValue("coolingSetpoint").toInteger()
-    def physciallMode = physcialThermostat.currentValue("thermostatMode").toInteger()
-
+    def physicalMode = physcialThermostat.currentValue("thermostatMode")
     if (physical != newHeatPoint && physicalMode == "heat") {
         physicalThermostat.setHeatingSetpoint(newHeatPoint)
     }
@@ -856,25 +972,24 @@ def logToGoogle() {
     logDebug("Log to Google Called")
     def thermoTemp = physicalThermostat.currentValue("temperature")
     def sensorTemp = virtualThermostat.currentValue("temperature")
-    def humidity = physicalThermostat.currentValue("humidity").toInteger()
-    def heatingSetpoint = physicalThermostat.currentValue("heatingSetpoint").toInteger()
-    def coolingSetpoint = physicalThermostat.currentValue("coolingSetpoint").toInteger()
+    def humidity = physicalThermostat.currentValue("humidity").toInteger()   
     def physicalState = physicalThermostat.currentValue("thermostatOperatingState")
     def virtualState = virtualThermostat.currentValue("thermostatOperatingState")
     def outsideTemp = virtualThermostat.currentValue("outsideTemp")
-    def slope = virtualThermostat.currentValue("slope")
+    def cycleSecs = virtualThermostat.currentValue("cycleSeconds")
     def thermostatMode = virtualThermostat.currentValue("thermostatMode")
     def thermostate = ""
     def logParams = ""
 
     if (thermostatMode == "heat") {
+        def heatingSetpoint = virtualThermostat.currentValue("heatingSetpoint").toInteger()
         logDebug("Logging Heat")
         if (virtualState == "Fan Only" || virtualState == "idle") {
             thermoState = null
-            logParams = "Heating Setpoint="+heatingSetpoint+"&Thermo Temp="+thermoTemp+"&Sensor Temp="+sensorTemp+"&Humidity="+humidity+"&Outside Temp="+outsideTemp+"&Slope="+slope
+            logParams = "Heating Setpoint="+heatingSetpoint+"&Thermo Temp="+thermoTemp+"&Sensor Temp="+sensorTemp+"&Humidity="+humidity+"&Outside Temp="+outsideTemp+"&Cycle Secs="+cycleSecs
         } else {
             def thermoState = heatingSetpoint
-            logParams = "Heating Setpoint="+heatingSetpoint+"&Thermo Temp="+thermoTemp+"&Sensor Temp="+sensorTemp+"&Thermo State="+thermoState+"&Humidity="+humidity+"&Outside Temp="+outsideTemp+"&Slope="+slope
+            logParams = "Heating Setpoint="+heatingSetpoint+"&Thermo Temp="+thermoTemp+"&Sensor Temp="+sensorTemp+"&Thermo State="+thermoState+"&Humidity="+humidity+"&Outside Temp="+outsideTemp+"&Cycle Secs="+cycleSecs
         }
         state.lastOperatingState = physicalState
 
@@ -891,13 +1006,14 @@ def logToGoogle() {
         }
     }
     if (thermostatMode == "cool") {
+        def coolingSetpoint = virtualThermostat.currentValue("coolingSetpoint").toInteger()
         logDebug("Logging AC")
         if (virtualState == "Fan Only" || virtualState == "idle") {
             thermoState = null
-            logParams = "Cooling Setpoint="+coolingSetpoint+"&Thermo Temp="+thermoTemp+"&Sensor Temp="+sensorTemp+"&Humidity="+humidity+"&Outside Temp="+outsideTemp+"&Slope="+slope
+            logParams = "Cooling Setpoint="+coolingSetpoint+"&Thermo Temp="+thermoTemp+"&Sensor Temp="+sensorTemp+"&Humidity="+humidity+"&Outside Temp="+outsideTemp+"&Cycle Secs="+cycleSecs
         } else {
             def thermoState = coolingSetpoint
-            logParams = "Cooling Setpoint="+heatingSetpoint+"&Thermo Temp="+thermoTemp+"&Sensor Temp="+sensorTemp+"&Thermo State="+thermoState+"&Humidity="+humidity+"&Outside Temp="+outsideTemp+"&Slope="+slope
+            logParams = "Cooling Setpoint="+coolingSetpoint+"&Thermo Temp="+thermoTemp+"&Sensor Temp="+sensorTemp+"&Thermo State="+thermoState+"&Humidity="+humidity+"&Outside Temp="+outsideTemp+"&Cycle Secs="+cycleSecs
         }
         state.lastOperatingState = physicalState
 
