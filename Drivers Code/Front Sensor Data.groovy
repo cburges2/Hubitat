@@ -64,18 +64,6 @@ metadata {
 		attribute "kitchenActivityMotion", "ENUM"
 		attribute "presence", "ENUM"
 		attribute "weatherForecast", "STRING"
-		/*
-		attribute "scheduleDawn", "STRING"
-		attribute "scheduleMorning", "STRING"
-		attribute "scheduleDay", "STRING"
-		attribute "scheduleEvening", "STRING"
-		attribute "scheduleDinner", "STRING"
-		attribute "scheduleLateEvening", "STRING"
-		attribute "scheduleTvTime", "STRING"
-		attribute "scheduleDim", "STRING"
-		attribute "scheduleNight", "STRING"
-		attribute "scheduleFireplaceOn", "STRING"
-		attribute "scheduleFireplaceOff", "STRING"*/
 
 		// Commands needed to change internal attributes of virtual device.
         command "setDruHome", [[name:"druHome",type:"ENUM", description:"Set Dru Home", constraints:["Yes","No"]]]
@@ -184,16 +172,26 @@ def setDinnerTime(value) {
 def setFrontMotionStatus(status) {
 	logDebug "setFrontMotionStatus(${status}) was called"
 	sendEvent(name: "frontMotionStatus", value: status, descriptionText: getDescriptionText("frontMotionStatus was set to ${status}"),stateChange: true)	
-    if (status == "Active") {
+/*     if (status == "Active") {
         def sec = 3600   // one hour
         logDebug "frontMotionyStatus Timeout in (${sec})"
 	    runIn(sec, setFrontMotionTimeout)
-	}       
+	}     */   
 }
 
 def setFrontMotionTimeout() {
     logDebug "setFrontMotionTimeout() was called"
 	sendEvent(name: "frontMotionStatus", value: "Timeout", descriptionText: getDescriptionText("frontMotionStatus was set to Timeout"),stateChange: true)
+}
+
+def setFrontMotionInactive() {	
+    logDebug "setFrontMotionInactive() was called"
+	sendEvent(name: "frontMotionStatus", value: "Inactive", descriptionText: getDescriptionText("frontMotionStatus was set to Inactive"),stateChange: true)
+}
+
+def setFrontMotionActive() {
+    logDebug "setFrontMotionActive() was called"
+	sendEvent(name: "frontMotionStatus", value: "Active", descriptionText: getDescriptionText("frontMotionStatus was set to Active"),stateChange: true)
 }
 
 def setFrontScheduledMode(value) {
@@ -299,7 +297,10 @@ def setKitchenActivityTimeoutMin(min) {
 def setKitchenMotionStatus(status) {
 	logDebug "setKitchenMotionStatus(${status}) was called"	
 	if (status == "Active") {
-		if (device.currentValue("kitchenMotionStatus") == "Timeout") {setKitchenMotion()}
+		if (device.currentValue("kitchenMotionStatus") == "Timeout") {							
+			setKitchenMotion()  // trigger back for the scene to run
+		}
+		setFrontMotionActive()	
 		sendEvent(name: "kitchenMotionStatus", value: "Active", descriptionText: getDescriptionText("kitchenMotionStatus was set to Active"),stateChange: true)	
 		unschedule("setKitchenMotionTimeout")	
 	}
@@ -318,14 +319,17 @@ def setKitchenMotionInactive() {
 	def timeoutMinutes = device.currentValue("frontTimeoutMinutes").toInteger()
 	logDebug "timeoutMinutes is (${timeoutMinutes})"
 	def sec = (timeoutMinutes * 60)			
-	setFrontMotionStatus("Inactive")
 	runIn(sec, setKitchenMotionTimeout)
 	logDebug "KitchenMotionStatus Timeout in (${sec})"	
+	def livingRoomMotion = device.currentValue("livingRoomMotionStatus")
+	if (livingRoomMotion == "Inactive" || livingRoomMotion == "Timeout") {setFrontMotionInactive()}
 }
 
 def setKitchenMotionTimeout() {
 	logDebug "setKitchenMotionTimeout() was called"
     sendEvent(name: "kitchenMotionStatus", value: "Timeout", descriptionText: getDescriptionText("kitchenMotionStatus was set to Timeout"),stateChange: true)
+
+	if (device.currentValue("livingRoomMotionStatus") == "Timeout") {setFrontMotionTimeout()}
 }
 
 def setKitchenMotion() {
@@ -342,8 +346,11 @@ def resetKitchenMotion() {
 def setLivingRoomMotionStatus(status) {
 	logDebug "setLivingRoomMotionStatus(${status}) was called"
     if (status == "Active") {
-		if (device.currentValue("livingRoomMotionStatus") == "Timeout") setLivingRoomMotion() 
+		if (device.currentValue("livingRoomMotionStatus") == "Timeout"){
+			setLivingRoomMotion() 		
+		} 
 		sendEvent(name: "livingRoomMotionStatus", value: "Active", descriptionText: getDescriptionText("livingRoomMotionStatus was set to Active"),stateChange: true)	
+		setFrontMotionActive()
 		unschedule("setLivingRoomMotionTimeout")
 	}
 	if (status == "Timeout") {
@@ -360,14 +367,17 @@ def setLivingRoomMotionInactive() {
 	def timeoutMinutes = device.currentValue("frontTimeoutMinutes").toInteger()
 	logDebug "timeoutMinutes is (${timeoutMinutes})"
 	def sec = (timeoutMinutes * 60)	
-	setFrontMotionStatus("Inactive")
 	logDebug "LivingRoomMotionStatus Timeout in (${sec})"
 	runIn(sec, setLivingRoomMotionTimeout)
+	def kitchenMotion = device.currentValue("kitchenMotionStatus")
+	if (kitchenMotion == "Inactive" || kitchenMotion == "Timeout") {setFrontMotionInactive()}	
 }
 
 def setLivingRoomMotionTimeout() {
 	logDebug "setLivingRoomMotionTimeout() was called"
 	sendEvent(name: "livingRoomMotionStatus", value: "Timeout", descriptionText: getDescriptionText("livingRoomMotionStatus was set to Timeout"),stateChange: true)
+
+	if (device.currentValue("kitchenMotionStatus") == "Timeout") {setFrontMotionTimeout()}
 }
 
 def setLivingRoomMotion() {
