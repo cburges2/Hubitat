@@ -47,8 +47,8 @@ void parse(List description) {
 void on() {
     parent?.componentOn(this.device)
     if (autoReset.toInteger()>0){      
-        def mins = autoReset.toInteger() * 60
-        runIn(mins, off)
+        def secs = autoReset.toInteger()
+        runIn(secs, off)
     }    
 }
 
