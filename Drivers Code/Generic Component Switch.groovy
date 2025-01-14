@@ -6,7 +6,7 @@
 	2018-12-15 maxwell
 	    -initial pub
     2025-01-14 chrisb
-        - added autoOff()
+        - added autoReset()
 
 */
 
@@ -18,7 +18,7 @@ metadata {
     }
     preferences {
         input name: "txtEnable", type: "bool", title: "Enable descriptionText logging", defaultValue: true
-        input name: "autoReset", type: "enum", description: "Automatically turn off based on interval.", title: "Enable Auto-Off", options: [[0:"Disabled"],[1:"1sec"],[2:"2sec"],[3:"3sec"],[4:"4sec"],[5:"5hr"],[8:"8sec"],[10:"10sec"]], defaultValue: 0
+        input name: "autoReset", type: "enum", description: "Automatically turn off based on interval.", title: "Enable Auto-Off", options: [[0:"Disabled"],[750:"750msec"],[1000:"1000msec"],[2000:"2Msec"],[3000:"3000msec"],[4000:"4000sec"],[5000:"5000msec"],[8000:"8000msec"],[10000:"10000msec"]], defaultValue: 0
     }
 }
 
@@ -47,8 +47,8 @@ void parse(List description) {
 void on() {
     parent?.componentOn(this.device)
     if (autoReset.toInteger()>0){      
-        def secs = autoReset.toInteger()
-        runIn(secs, off)
+        def msec = autoReset.toInteger()
+        runInMillis(msec, off)
     }    
 }
 
