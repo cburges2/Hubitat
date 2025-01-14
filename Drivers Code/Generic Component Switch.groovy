@@ -18,7 +18,7 @@ metadata {
     }
     preferences {
         input name: "txtEnable", type: "bool", title: "Enable descriptionText logging", defaultValue: true
-        input name: "autoReset", type: "enum", description: "Automatically turn off based on interval.", title: "Enable Auto-Off", options: [[0:"Disabled"],[750:"750msec"],[1000:"1000msec"],[2000:"2Msec"],[3000:"3000msec"],[4000:"4000sec"],[5000:"5000msec"],[8000:"8000msec"],[10000:"10000msec"]], defaultValue: 0
+        input name: "autoReset", type: "enum", description: "Automatically turn off based on interval.", title: "Enable Auto-Off", options: [[0:"Disabled"],[750:"750msec"],[1000:"1000msec"],[2000:"2000msec"],[3000:"3000msec"],[4000:"4000sec"],[5000:"5000msec"],[8000:"8000msec"],[10000:"10000msec"]], defaultValue: 0
     }
 }
 
