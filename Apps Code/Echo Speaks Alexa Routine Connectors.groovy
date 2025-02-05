@@ -167,10 +167,6 @@ def mainPage() {
         )
     }
 
- 
-
-
-
 
 def installed() {
     initialize()
@@ -187,15 +183,6 @@ def initialize() {
     if (state.more1) {
         subscribe(virtualSwitch2, "switch", switchHandler2)
     }
-     if (state.more2) {
-        subscribe(virtualSwitch3, "switch", switchHandler3)
-    }
-    /*if (state.more3) {
-        subscribe(virtualSwitch4, "switch", switchHandler4)
-    }
-    if (state.more4) {
-        subscribe(virtualSwitch5, "switch", switchHandler5)
-    }*/
 }    
 
 def switchHandler1(evt) {
