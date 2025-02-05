@@ -2,14 +2,15 @@
  *  ****************  Echo Speaks Alexa Routine Connectors  ****************
  *
  *  Usage:
- *  This was designed to control up to five virtual Switches from Hubitat using the executeRoutineId command in Echo Speaks App to control Alexa Devices
+ *  This was designed to control two virtual Switches from Hubitat using the executeRoutineId command in Echo Speaks App to control Alexa Devices
+ *  For more than two switches, use multiple instance of the app, and name them different in the app settings. 
  *
 **/
 
 definition (
     name: "Echo Speaks Alexa Routine Connectors",
     namespace: "Hubitat",
-    author: "Burgess",
+    author: "ChrisB",
     description: "Controller for Alexa connected dimmer devices from Hubitat using Echo Speaks executeRoutineId feature",
     category: "My Apps",
     iconUrl: "",
