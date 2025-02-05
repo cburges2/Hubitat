@@ -212,42 +212,6 @@ def switchHandler2(evt) {
     echoDevice.executeRoutineId(routineID)
 }
 
-def switchHandler3(evt) {
-    state.switch3 = evt.value
-    logDebug("Switch Event = $state.switch3")   
-
-    def routineID = ""
-    if (evt.value == "on") routineID = onRoutine3
-    else routineID = offRoutine3
-    logDebug("routineID = $routineID")
-
-    echoDevice.executeRoutineId(routineID)
-}
-/*
-def switchHandler4(evt) {
-    state.switch1 = evt.value
-    logDebug("Switch Event = $state.switch1")   
-
-    def routineID = ""
-    if (evt.value == "on") routineID = onRoutine4
-    else routineID = offRoutine4
-    logDebug("routineID = $routineID")
-
-    echoDevice.executeRoutineId(routineID)
-}
-
-def switchHandler5(evt) {
-    state.switch1 = evt.value
-    logDebug("Switch Event = $state.switch1")   
-
-    def routineID = ""
-    if (evt.value == "on") routineID = onRoutine5
-    else routineID = offRoutine4
-    logDebug("routineID = $routineID")
-
-    echoDevice.executeRoutineId(routineID)
-}*/
-
 def logDebug(txt){
     try {
         if (settings.debugMode) { log.debug("${app.label} - ${txt}") }
