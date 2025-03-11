@@ -45,16 +45,6 @@ lock
               multiple: false,
               submitOnChange: true             
             )
-
-            if (virtualSwitch) {
-                input (
-                    name: "trackVirtualSwitch", 
-                    type: "bool", 
-                    title: "Track Virtual Switch Changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            } 
         }
 
         section("<b>ZigbeeIR On Command</b>") {
@@ -109,16 +99,6 @@ lock
                 multiple: false,
                 submitOnChange: true             
                 )
-
-                if (virtualSwitch2) {
-                    input (
-                        name: "trackVirtualSwitch2", 
-                        type: "bool", 
-                        title: "Track Virtual Switch2 Changes", 
-                        required: true, 
-                        defaultValue: "true"
-                    )
-                } 
             }
 
         section("<b>ZigbeeIR On Command 2</b>") {
@@ -172,16 +152,6 @@ lock
                     multiple: false,
                     submitOnChange: true             
                     )
-
-                    if (virtualSwitch2) {
-                        input (
-                            name: "trackVirtualSwitch3", 
-                            type: "bool", 
-                            title: "Track Virtual Switch3 Changes", 
-                            required: true, 
-                            defaultValue: "true"
-                        )
-                    } 
                 }
 
                 section("<b>ZigbeeIR On Command 3</b>") {
@@ -235,16 +205,6 @@ lock
                         multiple: false,
                         submitOnChange: true             
                         )
-
-                        if (virtualSwitch4) {
-                            input (
-                                name: "trackVirtualSwitch4", 
-                                type: "bool", 
-                                title: "Track Virtual Switch4 Changes", 
-                                required: true, 
-                                defaultValue: "true"
-                            )
-                        } 
                     }
 
                     section("<b>ZigbeeIR On Command 4</b>") {
@@ -298,16 +258,6 @@ lock
                             multiple: false,
                             submitOnChange: true             
                             )
-
-                            if (virtualSwitch4) {
-                                input (
-                                    name: "trackVirtualSwitch5", 
-                                    type: "bool", 
-                                    title: "Track Virtual Switch4 Changes", 
-                                    required: true, 
-                                    defaultValue: "true"
-                                )
-                            } 
                         }
 
                         section("<b>ZigbeeIR On Command 5</b>") {
@@ -382,57 +332,57 @@ def switchHandler(evt) {
     logDebug("Switch Event = $state.swtich")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state.on1)
+        zigbeeDevice.SendStoredCode(state?.on1)
     } else {
-        zigbeeDevice.SendStoredCode(state.off1,2)
+        zigbeeDevice.SendStoredCode(state?.off1)
     }
 }
 
 def switchHandler2(evt) {
 
     state.switch2 = evt.value
-    logDebug("Switch2 Event = $state.swtich2")   
+    logDebug("Switch2 Event = $state?.swtich2")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state.on2)
+        zigbeeDevice.SendStoredCode(state?.on2)
     } else {
-        zigbeeDevice.SendStoredCode(state.off2,2)
+        zigbeeDevice.SendStoredCode(state?.off2)
     }
 }
 
 def switchHandler3(evt) {
 
     state.switch3 = evt.value
-    logDebug("Switch3 Event = $state.swtich3")   
+    logDebug("Switch3 Event = $state?.swtich3")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state.on3)
+        zigbeeDevice.SendStoredCode(state?.on3)
     } else {
-        zigbeeDevice.SendStoredCode(state.off3)
+        zigbeeDevice.SendStoredCode(state?.off3)
     }
 }
 
 def switchHandler4(evt) {
 
     state.switch4 = evt.value
-    logDebug("Switch4 Event = $state.swtich4")   
+    logDebug("Switch4 Event = $state?.swtich4")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state.on4)
+        zigbeeDevice.SendStoredCode(state?.on4)
     } else {
-        zigbeeDevice.SendStoredCode(state.off4)
+        zigbeeDevice.SendStoredCode(state?.off4)
     }
 }
 
 def switchHandler5(evt) {
 
     state.switch5 = evt.value
-    logDebug("Switch5 Event = $state.swtich5")   
+    logDebug("Switch5 Event = $state?.swtich5")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state.on5)
+        zigbeeDevice.SendStoredCode(state?.on5)
     } else {
-        zigbeeDevice.SendStoredCode(state.off5)
+        zigbeeDevice.SendStoredCode(state?.off5)
     }
 }
 
