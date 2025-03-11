@@ -209,7 +209,7 @@ def mainPage() {
               multiple: false,
               submitOnChange: true               
             )
-            if (settings.selectController) {
+            if (settings?.selectController) {
                 state.useFan = true
                 section("<b>Switch Device</b>") {
                     input (
@@ -234,7 +234,7 @@ def mainPage() {
               multiple: false,
               submitOnChange: true               
             )
-            if (settings.selectHumidity) {
+            if (settings?.selectHumidity) {
                 state.useHumidity = true
                 section("<b>Humidity Device</b>") {
                     input (
@@ -259,7 +259,7 @@ def mainPage() {
               multiple: false,
               submitOnChange: true               
             )
-            if (settings.selectController2) {
+            if (settings?.selectController2) {
                 state.useHeatSwitch = true
                 section("<b>Switch Device</b>") {
                     input (
@@ -302,6 +302,9 @@ def installed() {
     state.tempDrift = 0.51
     state.externalSensor = "temp1"
     initialize()
+
+    state.lastTemp = externalSensor.currentValue("Temperature")
+    state.fanState = "off"
 }
 
 def updated() {
@@ -313,6 +316,7 @@ def updated() {
     unschedule()
 
     state.fanState = "off"
+    state.externalSensor = "temp1"
 
     initialize()
 }
@@ -350,7 +354,7 @@ def initialize() {
     // sync the external temp sensor to thermostat
     subscribe(tempSensor, "temperature", externalTempHandler)
     if (tempSensor2) {subscribe(tempSensor2, "temperature", externalTempHandler2)}
-    if (tempSensor2) {subscribe(tempSensor2, "motion", externalMotionHandler2)}
+    //subscribe(tempSensor2, "motion", externalMotionHandler2)
     if (tempSensor3) {subscribe(tempSensor3, "temperature", externalTempHandler3)}
     if (tempSensor3) {subscribe(tempSensor3, "motion", externalMotionHandler3)}
     
@@ -620,9 +624,10 @@ def checkStates() {
     }  
 
     // refresh temp sensors - living room cannot be refreshed (ecowitt sensor)
-    if (physicalThermostat.getLabel() != "Living Room Thermostat") {tempSensor.refresh()}
-    if (tempSensor2 && physicalThermostat.getLabel() != "Living Room Thermostat") {tempSensor2.refresh()}
-    if (tempSensor3) {tempSensor3.refresh()}    
+    //def thermoName = physicalThermostat.getLabel()
+    //if (thermoName != "Living Room Thermostat" && thermoName != "Bedroom Thermostat" && thermoName != "Basement Thermostat") {tempSensor.refresh()}
+    //if (tempSensor2 && physicalThermostat.getLabel() != "Living Room Thermostat") {tempSensor2.refresh()}
+    //if (tempSensor3) {tempSensor3.refresh()}    
     logDebug("checkStates() completed")
 
     restartCheckTimer() // repeat timer
@@ -810,7 +815,7 @@ def externalTempChangeCheck() {
 
 // reset sensor back to defalt after a 1/2 hour of no motion
 def resetExternalSensor() {
-    state.externalSensor = "temp2"
+    state.externalSensor = "temp1"
     //def temp = tempSensor.currentValue("temperature")
     def temp = tempSensor2.currentValue("temperature")
     virtualThermostat.setTemperature(temp)
@@ -818,12 +823,21 @@ def resetExternalSensor() {
 
 def externalTempHandler(evt) {
     logDebug("External Temp Change Event = ${evt.value}")
-
-    if (state?.externalSensor == "temp1") {
-        virtualThermostat.setTemperature(evt.value)
-        runIn(1,logToGoogle)
-        runIn(5, checkStates)
+    def temp = evt.value.toString()
+    def lastTemp = state?.lastTemp.toString()
+    //logDebug("Last External Temp was ${lastTemp}")
+    def change = !temp.equals(lastTemp)
+    logDebug("Change is ${change}")
+    
+    if (change) {
+        if (state?.externalSensor == "temp1") {
+            virtualThermostat.setTemperature(evt.value)
+            runIn(1,logToGoogle)
+            runIn(5, checkStates)
+        }
     }
+
+    state.lastTemp = evt.value
 }
 
 def externalTempHandler2(evt) {
@@ -834,6 +848,7 @@ def externalTempHandler2(evt) {
         runIn(1,logToGoogle)
         runIn(5, checkStates)
     }
+    state.lastTemp2 = evt.value
 }
 
 def externalTempHandler3(evt) {
@@ -844,6 +859,7 @@ def externalTempHandler3(evt) {
         runIn(1,logToGoogle)
         runIn(5, checkStates)
     }
+    state.lastTemp3 = evt.value
 }
 
 def externalHumidityHandler(evt) {
@@ -912,7 +928,7 @@ def virtualThermoHeatPointHandler(evt) {
 
     def newHeatPoint = evt.value.toInteger()
     def physical = physicalThermostat.currentValue("coolingSetpoint").toInteger()
-    def physicalMode = physcialThermostat.currentValue("thermostatMode")
+    def physicalMode = physicalThermostat.currentValue("thermostatMode")
     if (physical != newHeatPoint && physicalMode == "heat") {
         physicalThermostat.setHeatingSetpoint(newHeatPoint)
     }
