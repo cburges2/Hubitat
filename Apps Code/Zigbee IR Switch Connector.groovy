@@ -24,6 +24,10 @@ def mainPage() {
 lock
     dynamicPage(name: "mainPage") {
 
+        section("App Name") {
+            label title: "", required: false
+        }   
+        
         section("<b>Zigbee IR Device</b>") {
 
             input (
