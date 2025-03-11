@@ -332,9 +332,9 @@ def switchHandler(evt) {
     logDebug("Switch Event = $state.swtich")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state?.on1)
+        zigbeeDevice.sendCode(state?.on1)
     } else {
-        zigbeeDevice.SendStoredCode(state?.off1)
+        zigbeeDevice.sendCode(state?.off1)
     }
 }
 
@@ -344,9 +344,9 @@ def switchHandler2(evt) {
     logDebug("Switch2 Event = $state?.swtich2")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state?.on2)
+        zigbeeDevice.sendCode(state?.on2)
     } else {
-        zigbeeDevice.SendStoredCode(state?.off2)
+        zigbeeDevice.sendCode(state?.off2)
     }
 }
 
@@ -356,9 +356,9 @@ def switchHandler3(evt) {
     logDebug("Switch3 Event = $state?.swtich3")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state?.on3)
+        zigbeeDevice.sendCode(state?.on3)
     } else {
-        zigbeeDevice.SendStoredCode(state?.off3)
+        zigbeeDevice.sendCode(state?.off3)
     }
 }
 
@@ -368,9 +368,9 @@ def switchHandler4(evt) {
     logDebug("Switch4 Event = $state?.swtich4")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state?.on4)
+        zigbeeDevice.sendCode(state?.on4)
     } else {
-        zigbeeDevice.SendStoredCode(state?.off4)
+        zigbeeDevice.sendCode(state?.off4)
     }
 }
 
@@ -380,9 +380,9 @@ def switchHandler5(evt) {
     logDebug("Switch5 Event = $state?.swtich5")   
 
     if (evt.value == "on") {
-        zigbeeDevice.SendStoredCode(state?.on5)
+        zigbeeDevice.sendCode(state?.on5)
     } else {
-        zigbeeDevice.SendStoredCode(state?.off5)
+        zigbeeDevice.sendCode(state?.off5)
     }
 }
 
