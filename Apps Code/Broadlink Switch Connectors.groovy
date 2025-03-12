@@ -408,7 +408,7 @@ def switchHandler3(evt) {
     if (evt.value == "on") {
         broadlinkDevice.SendStoredCode(state.on3)
     } else {
-        broadlinkDevice.SendStoredCode(state.off3)
+        broadlinkDevice.SendStoredCode(state.off3,2)
     }
 }
 
@@ -420,7 +420,7 @@ def switchHandler4(evt) {
     if (evt.value == "on") {
         broadlinkDevice.SendStoredCode(state.on4)
     } else {
-        broadlinkDevice.SendStoredCode(state.off4)
+        broadlinkDevice.SendStoredCode(state.off4,2)
     }
 }
 
@@ -432,7 +432,7 @@ def switchHandler5(evt) {
     if (evt.value == "on") {
         broadlinkDevice.SendStoredCode(state.on5)
     } else {
-        broadlinkDevice.SendStoredCode(state.off5)
+        broadlinkDevice.SendStoredCode(state.off5,2)
     }
 }
 
