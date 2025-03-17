@@ -29,8 +29,7 @@ metadata {
         command "on"
         command "off"
         command "setLevel", ["NUMBER"]
-        command "setOffMin", [[name:"offMinutes",type:"ENUM", description:"Set Off in Minutes", constraints:["5","10","15","20","25","30","35","40","45","60","90","120"]]]
-        command "setOffInMin", [[name:"offInMin",type:"ENUM", description:"Set Off in Minutes", constraints:["X","5","10","15","20","25","30","35","40","45"]]]
+        command "setOffMin", [[name:"offInMin",type:"ENUM", description:"Set Off Minutes", constraints:["X","5","10","15","20","25","30","35","40","45"]]]
 }
 
 	preferences {
@@ -55,6 +54,10 @@ def updated() {
 
 def initialize() {
 
+    sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch off")) 
+    sendEvent(name: "speed", value: "off", descriptionText: getDescriptionText("speed set to off"))
+    sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch set to off"))
+    sendEvent(name: "offMinutes", value: "30", descriptionText: getDescriptionText("offMinutes set to 30"))
 }
 
 def setOffMin(min) {
@@ -117,20 +120,6 @@ def setSpeedLevel(speed) {
 
 def setSupportedFanSpeeds(json) {
     sendEvent(name: "supportedFanSpeeds", value: json, descriptionText: getDescriptionText("supportedFanSpeeds set to ${json}")) 
-}
-
-def setOffInMin(min) {
-    logDebug "setOffInMin(${min}) was called"
-
-    if (min == "X") {
-        unschedule("autoTimerOff")
-        unschedule("off")
-        runIn(10800, off)
-    } else if (device.currentValue("speed") != "off") {
-        def sec = (min.toInteger() * 60)
-        logDebug "Off in ${sec} seconds"
-        runIn(sec, autoTimerOff)
-    }
 }
 
 def autoTimerOff() {
