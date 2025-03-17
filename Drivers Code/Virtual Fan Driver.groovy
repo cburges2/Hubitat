@@ -24,7 +24,7 @@ metadata {
         attribute "supportedFanSpeeds", "JSON_OBJECT"
         attribute "level", "ENUM"
 
-        command "setSpeed", [[name:"setSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["off","low","medium-low","medium","medium-high","high"]]]
+        command "setSpeed", [[name:"setSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["off","low","medium","medium-high","high"]]]
         command "setSupportedFanSpeeds", ["JSON_OBJECT"]
         command "on"
         command "off"
@@ -59,7 +59,7 @@ def initialize() {
     sendEvent(name: "speed", value: "off", descriptionText: getDescriptionText("speed set to off"))
     sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch set to off"))
     sendEvent(name: "offMinutes", value: "30", descriptionText: getDescriptionText("offMinutes set to 30"))
-    sendEvent(name: "supportedFanSpeeds", value: '["low","medium-low","medium","medium-high","high","on","off"]', descriptionText: getDescriptionText("supportedFanSpeeds set"))
+    sendEvent(name: "supportedFanSpeeds", value: '["low","medium","medium-high","high","on","off"]', descriptionText: getDescriptionText("supportedFanSpeeds set"))
 }
 
 def setOffMin(min) {
@@ -85,11 +85,10 @@ def setLevel(level) {
 
     def lvl = level.toInteger()
     if (lvl == 0) {setSpeed("off")}
-    if (lvl > 0 && lvl < 20) {setSpeed("low")}
-    if (lvl >= 20 && lvl < 40) {setSpeed("medium-low")}
-    if (lvl >= 40 && lvl < 60) {setSpeed("medium")}
-    if (lvl >= 60 && lvl < 80) {setSpeed("medium-high")}
-    if (lvl >= 80) {setSpeed("high")}
+    if (lvl > 0 && lvl < 25) {setSpeed("low")}
+    if (lvl >= 25 && lvl < 50) {setSpeed("medium")}
+    if (lvl >= 50 && lvl < 75) {setSpeed("medium-high")}
+    if (lvl >= 75) {setSpeed("high")}
     sendEvent(name: "level", value: level, descriptionText: getDescriptionText("Level set to ${level}")) 
 }
 
@@ -102,14 +101,14 @@ def setSpeed(speed) {
     logDebug "setSpeed(${speed}) was called"
     if (speed == "off") {off()}
     else if (speed == "on") {on()}
-    else if (speed == "low" || speed == "medium-low" || speed == "medium" || speed == "medium-high" || speed == "high") {  
+    else if (speed == "low" || speed == "medium" || speed == "medium-high" || speed == "high") {  
         sendEvent(name: "speed", value: speed, descriptionText: getDescriptionText("speed set to ${speed}"))     
         if (device.currentValue("switch") == "off") {
             sendEvent(name: "switch", value: "on", descriptionText: getDescriptionText("switch on"))
             autoTurnOff()
         }          
         state.speed = speed
-    }
+    } 
     setSpeedLevel(speed)
 }
 
@@ -117,9 +116,8 @@ def setSpeedLevel(speed) {
 
     def level = 0
     if (speed == "low") {level = 20}
-    if (speed == "medium-low") {level = 40}
-    if (speed == "medium") {level = 60}
-    if (speed == "medium-high") {level = 80}
+    if (speed == "medium") {level = 45}
+    if (speed == "medium-high") {level = 70}
     if (speed == "high") {level = 100}
     sendEvent(name: "level", value: level, descriptionText: getDescriptionText("Level set to ${level}"))
 }
