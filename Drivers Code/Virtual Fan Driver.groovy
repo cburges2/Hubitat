@@ -4,7 +4,9 @@
 	Copyright 2025 -> ChrisB 
 
     Version 1.0 - 11/14/24
-
+    Version 1.2 - 03/17/25 - updated to SwitchLevel, using speed range of three
+    Version 1.3 - 03/16/25 - updated to use Medium-high, using speed range of four
+    Version 1.3 - 03/16/25 - fixed level defaulting to zero with setSpeedLevel of "on"
 */
 
 metadata {
@@ -77,7 +79,7 @@ def on() {
 def off() {
     state.speed = device.currentValue("speed")
     sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch off")) 
-    sendEvent(name: "speed", value: "off", descriptionText: getDescriptionText("speed set to off"))
+    sendEvent(name: "speed", value: "off", descriptionText: getDescriptionText("speed set to off")) 
     unschedule()
 }
 
@@ -114,12 +116,13 @@ def setSpeed(speed) {
 
 def setSpeedLevel(speed) {
 
-    def level = 0
+    def level = device.currentValue("level")
+    
     if (speed == "low") {level = 20}
     if (speed == "medium") {level = 45}
     if (speed == "medium-high") {level = 70}
     if (speed == "high") {level = 100}
-    sendEvent(name: "level", value: level, descriptionText: getDescriptionText("Level set to ${level}"))
+    if (speed != "off") sendEvent(name: "level", value: level, descriptionText: getDescriptionText("Level set to ${level}")) 
 }
 
 def setSupportedFanSpeeds(json) {
