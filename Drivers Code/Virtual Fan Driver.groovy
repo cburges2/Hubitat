@@ -77,7 +77,7 @@ def on() {
 }
 
 def off() {
-    state.speed = device.currentValue("speed")
+    //state.speed = device.currentValue("speed")
     sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch off")) 
     sendEvent(name: "speed", value: "off", descriptionText: getDescriptionText("speed set to off")) 
     unschedule()
