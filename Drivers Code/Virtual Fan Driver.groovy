@@ -7,6 +7,7 @@
     Version 1.2 - 03/17/25 - updated to SwitchLevel, using speed range of three
     Version 1.3 - 03/16/25 - updated to use Medium-high, using speed range of four
     Version 1.3 - 03/16/25 - fixed level defaulting to zero with setSpeedLevel of "on"
+    Version 1.4 - 03/19/25  - fixed not turning on for state.speed being set to off when setting speed after a switch on event
 */
 
 metadata {
@@ -26,7 +27,7 @@ metadata {
         attribute "supportedFanSpeeds", "JSON_OBJECT"
         attribute "level", "ENUM"
 
-        command "setSpeed", [[name:"setSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["off","low","medium","medium-high","high"]]]
+        command "setSpeed", [[name:"setSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["on","off","low","medium","medium-high","high"]]]
         command "setSupportedFanSpeeds", ["JSON_OBJECT"]
         command "on"
         command "off"
@@ -77,7 +78,6 @@ def on() {
 }
 
 def off() {
-    //state.speed = device.currentValue("speed")
     sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch off")) 
     sendEvent(name: "speed", value: "off", descriptionText: getDescriptionText("speed set to off")) 
     unschedule()
