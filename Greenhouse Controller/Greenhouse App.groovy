@@ -81,17 +81,6 @@ def mainPage() {
             )         
         }
 
-/*         section("<b>GreenHouse Motion Sensor Device</b>") {
-            input (
-                name: "motion", 
-                type: "capability.motionSensor", 
-                title: "Select GreenHouse Motion Sensor Device", 
-                required: false, 
-                multiple: false,
-                submitOnChange: true
-            )         
-        } */
-
         section("<b>Green House Vent Fan Switch Device</b>") {
             input (
                 name: "fan", 
@@ -206,9 +195,6 @@ def initialize() {
 
     subscribe(temperature, "temperature", setTemperature) 
     subscribe(fan, "switch", fanSwitchController) 
-    //if (motion) {subscribe(motion, "motion", motionController)}
-    
-    //subscribe(greenhouseDriver, "fanState", fanStateController)  //******* enable?
 }
 
 def setGreenhouseDevice() {
@@ -307,7 +293,6 @@ def circulatorSwitchController(evt) {
     } else if (evt.value == "off" && circState == "on") {greenhouseDriver.setCirculatorState("off")}
 }
 
-
 // *********** Update device Values in Driver when app sensor devices update **************
 
 // Humidity sensor event - update driver
@@ -403,7 +388,7 @@ def setOutsideHumidity(evt) {
 }
 
 
-// ************ Change the state of the heat/cool devices when their attribute state changes in the driver ***************
+// ************ Change the state of the heat/cool devices when sent commands from the driver ***************
 
 // control pads switch from greenhouse pads state
 def heatPadsStateController(value) {
@@ -440,7 +425,7 @@ def fanSpeedController(speed) {
     if (fan.currentValue("switch") != "off") {fan.setSpeed(speed)}
 }
 
-// ****** Change the state of heater and vent fan devices when operating state changes *******
+// ****** Change the state of heater and vent fan devices when operating state changes from driver *******
 def operatingStateController(opState) {
     def last = state?.operatingState
     def operatingState = opState  //evt.value
@@ -448,7 +433,8 @@ def operatingStateController(opState) {
     logDebug("GreenHouse Operating State Event = ${operatingState}, was ${last}")
 
     if (operatingState == "venting") {
-        fanOn()
+        fanOn()  
+        runIn(1,setFanSpeed)
     }
     if (operatingState == "heating") {
         heatOn()
@@ -456,9 +442,20 @@ def operatingStateController(opState) {
     if (operatingState == "idle") {
         heatOff()
         fanOff()
+        runIn(1,setFanSpeed)
     }
     runIn(1,logToGoogle)
     state.operatingState = opState
+}
+
+// set driver fanSpeed Attribute
+def setFanSpeed() {
+    greenhouseDriver.setFanSpeed(fan.currentValue("speed"))
+}
+
+// return fan speed to the device
+def getFanSpeed() {
+    return(fan.currentValue("speed"))
 }
 
 // on/off device commands for operating state changes
@@ -478,20 +475,6 @@ def heatOff() {
 def heatOn() {
     logDebug("Turning heater on")
     heater.on()
-}
-
-// Motion Controller event
-def motionController(evt) {
-
-/*     if (evt.value == "active") {
-        if (temperature.currentValue("temperature") < 70.0) {
-            circulator.off()
-        }
-    } else {
-        if (temperature.currentValue("temperature") < 70.0) {
-            circulator.on()
-        }
-    } */
 }
 
 def logDebug(txt){
