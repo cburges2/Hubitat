@@ -20,16 +20,20 @@
 	6- Heat Pads setpoint higher (layer button on top of heat pad setpoint display tile)
 	7. Toggle Circulate with Vent setting
 	8. Toggle the Circulate with Heat setting
+	9. Circulator On Temp lower
+	10. Circulator On Temp higher
 
 	To use the Command Variable String Tile to change settings (instead of using the up and down buttons for setpoint changes, and needed to set the circulator on temp):
 		The "variable" attribute and capabililty allows adding a String Variable tile to the dashboard.  It will just display empty when not in use. 
 		To send a command, fill in the map by using command:value.  The commands are coolsetpoint (or csp), heatsetpoint (or hsp), hysteresis (or hys), padsetpoint (hps) 
 		circontemp (or cot), and autothreshold (or ath). example: circontemp:65 or cot:65.  Several commands can be combined, but must be comma separated. ex. csp:80,hsp:65 
 		
-	Build the Heat Pad Setpoint Tile:
-		The presence attribute is to provide a "Heat pads On" background color for the Heat Pad Setpoint tile, when heat pads are activated.  "present" when on, "not present" when off
-		Create the presence tile, remove the title and icon with css. Add the heatpad display attribute tile, and make it background transparent, and put it on top of the presence tile. 
-		Set the presence colors in the dashboard template options.  Add the buttons for changing the settings on top of that tile, and make the buttons on top and background transparent.   
+	Build the Heat Pad Setpoint and Circulator On Temp Tile:
+		The presence and contact attribute are to provide a "Heat pads On" and "Circ On by Temp" background color for the Setpoint tiles, when heat pads are activated or the
+		circulator is on by temp.  "present" when on, "not present" when off, "open" when temp circulate, "closed" when not. Create the presence/contact tiles, remove the title
+		and icon with css. Add the heatpad/circulator display attribute tiles, and make them background transparent, and put them on top of the presence/contact tiles. 
+		Set the presence/contact colors in the dashboard template options.  Add the buttons for changing the settings on top of that tile, and make the buttons on top and 
+		background transparent.   
 
 	Auto fan setting: When the fan is in auto mode, it will cycle speed when below the auto temp threshold.  When trend changes to falling, it will go down one speed, when trend
 		changes to rising, it will go up one speed, IF temp is within the set threshold from setpoint. Above that threshold, fan will just stay on high. 
@@ -49,6 +53,9 @@
 						to monitor the driver states.
 	v. 2.1 - 4/8/25   - Added buttons 7 and 8 to toggle the circulate vent and circulate heat settings from the dashboard. Added variable command circontemp (or cot) to set the 
 						Circulator On Temp, and autothreshold (or ath) to set the fan auto threshold, to what can be set from the dashboard variable command tile.
+	v. 2.2 - 4/17/25  - Added buttons 9 and 10 to set the circulator on setpoint.  Added contact capability and contact attribute, which changes to open when the circulator is on and 
+						above the on temperature (for setpoint tile background).  Added circ setpoint display to build the circ on temp setpoint dashboard tile. Removed the setting
+						for Circ On Temp.  
 */
 
 import java.text.SimpleDateFormat
@@ -66,6 +73,7 @@ metadata {
 		capability "Pushable Button"
 		capability "Temperature Measurement"
 		capability "RelativeHumidityMeasurement"
+		capability "Contact Sensor"
 
 		// attributes
 		attribute "operatingState", "ENUM"  		// ["venting", "idle", "heating"]
@@ -81,6 +89,7 @@ metadata {
 		attribute "displayTemp", "STRING"			// attribute for dashboard status tile showing greenhouse temperature and trend arrow
 		attribute "displayTemps", "STRING"			// attribute for dashboard status tile showing temps and humidity only
 		attribute "displayPadSet", "String"			// attribute for the heat pad temp setting
+		attribute "displayCircSet", "String"		// attribute for the circulator temp setting
         attribute "temperature", "NUMBER"        	// set from app
 		attribute "tempTrend", "ENUM"				// rising, falling
 		attribute "outTempTrend", "ENUM"			// rising, falling
@@ -88,10 +97,12 @@ metadata {
         attribute "heatingSetpoint", "ENUM"         // set from the thermostat tile
         attribute "coolingSetpoint", "ENUM"      	// set from the thermostat tile
 		attribute "heatPadSetpoint", "ENUM"			// set using the buttons for heatpad temp up and temp down
+		attribute "circulatorSetpoint", "ENUM"		// set using the buttons for circulator temp up and temp down
 		attribute "fanSpeed", "ENUM"   			    // low, medium, high, off - manually set as a speed reference, or auto set, based on threshold setting
 		attribute "fanMode", "ENUM"					// auto or manual (auto adjusts speeds based on temp rise and fall below threshold
         attribute "presence", "ENUM"                // set to present when heat pads are on, not present when they are off
 		attribute "icon", "STRING"                  // status icon attribute to be use on a dashboard tile (heating (heater), cooling (fan), or idle (OK checkmark))
+		attribute "contact", "ENUM"
 		
 		attribute "iconFile", "STRING"				// file name used for the icon attribute
 		attribute "message", "STRING"				// a status message that describes the current states in english
@@ -131,8 +142,10 @@ metadata {
         command "setHeatingSetpoint", ["NUMBER"]
 		command "setCoolingSetpoint", ["NUMBER"]
 		command "setHeatPadSetpoint", ["NUMBER"]
+		command "setCirculatorSetpoint", ["NUMBER"]
         command "setFanSpeed", [[name:"fanSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["low","medium","high"]]]
         command "setPresence", [[name:"presence",type:"ENUM", description:"Set Presence State", constraints:["present","not present"]]]
+		command "setContact", [[name:"contact",type:"ENUM", description:"Set Contact State", constraints:["open","closed"]]]
 		command "setIcon", ["STRING"]
 		command "setMessage", ["STRING"]
 		command "setVariable", ["STRING"]  			// used to run commands from a dashboard string variable tile
@@ -151,7 +164,8 @@ metadata {
 		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
 		input( name: "circulateVent", type:"bool", title: "Circulate when Venting (do not turn off when venting)", defaultValue:false)
 		input( name: "circulateHeat", type:"bool", title: "Circulate Only when Heating (turn off on idle)",defaultValue: false)
-		input( name: "circulatorOnTemp", type:"enum", title: "Temp to keep circulator on when idle", defaultValue:"60", options:[50.0:"50",55.0:"55",60.0:"60",65.0:"65",70.0:"70"])		
+		//input( name: "circulatorOnTemp", type:"enum", title: "Temp to keep circulator on when idle", defaultValue:"60", options:[50.0:"50",55.0:"55",60.0:"60",65.0:"65",70.0:"70"])
+		
 		input( name: "fanAutoThreshold", type:"enum", title: "Vent Fan Auto Speed Temp Theshold", defaultValue:"2", options:[1.0:"1",2.0:"2",3.0:"3",4.0:"4",5.0:"5"])
 		input( name: "iconPath", type: "string", description: "Address Path to icons", title: "Set Icon Path", defaultValue: "")
 	    input( name: "tempFontSize", type:"enum", title: "Temp Display Font Size",defaultValue:"18", options:[10:"10",11:"11",12:"12",13:"13",14:"14",15:"15",16:"16",17:"17",18:"18"])	
@@ -210,6 +224,7 @@ def updated() {
 def initialize() {
 	if (!circulateHeat) {setCirculatorState("on")}     				// for updating state after a setting change
 	circulatorOnWithTemp(device.currentValue("temperature"))	
+
 }	
 
 def parse(String description) { noCommands("parse") }
@@ -284,13 +299,13 @@ def push(button) {
 	else if (button == "5") {
 		logDebug("Heat pad temp down")
 		def temp = device.currentValue("heatPadSetpoint").toInteger()
-		def newTemp = (temp - 1).toString()
+		def newTemp = (temp - 5).toString()
 		setHeatPadSetpoint(newTemp)
 	}
 	else if (button == "6") {
 		logDebug("Heat pad temp up")
 		def temp = device.currentValue("heatPadSetpoint").toInteger()
-		def newTemp = (temp + 1).toString()
+		def newTemp = (temp + 5).toString()
 		setHeatPadSetpoint(newTemp)
 	}
 	else if (button == "7") {
@@ -307,6 +322,18 @@ def push(button) {
 		else {device.updateSetting("circulateHeat",[value: true,type:"bool"])}
 		setDisplay("status")
 	}
+	else if (button == "9") {
+		logDebug("Circulator temp down")
+		def temp = device.currentValue("circulatorSetpoint").toInteger()
+		def newTemp = (temp - 5).toString()
+		setCirculatorSetpoint(newTemp)
+	}
+	else if (button == "10") {
+		logDebug("Circulator temp up")
+		def temp = device.currentValue("circulatorSetpoint").toInteger()
+		def newTemp = (temp + 5).toString()
+		setCirculatorSetpoint(newTemp)
+	}	
 	runIn(1,manageCycle)
 }
 
@@ -354,7 +381,7 @@ def setVariable(value) {
         if (value.contains("hsp")) {setHeatingSetpoint(settingsMap.hsp.toString())}; setDisplay("setpoints")	// Heating setpoint
         if (value.contains("hys")) {setHysteresis(settingsMap.hys.toString())}		// hysteresis
 		if (value.contains("hps")) {setHeatPadSetpoint(settingsMap.hps.toString()); setDisplay("pads")}	// heating pad setpoint
-		if (value.contains("cot")) {device.updateSetting("circulatorOnTemp",[value: settingsMap.cot.toString(),type:"enum"]); setDisplay("status")} // circulator on temp
+		if (value.contains("cot")) {setCirculatorSetpoint(settingsMap.cot.toString()); setDisplay("status")} // circulator on temp
 		if (value.contains("ath")) {device.updateSetting("fanAutoThreshold",[value: settingsMap.ath.toString(),type:"enum"]); setDisplay("status")} // vent auto threshold
 
         // update using names in map intead of using the abbreviations above
@@ -362,12 +389,12 @@ def setVariable(value) {
         if (value.contains("heatsetpoint")) {setHeatingSetpoint(settingsMap.heatsetpoint.toString()); setDisplay("setpoints")}
         if (value.contains("hysteresis")) {setHysteresis(settingsMap.hysteresis.toString())}
 		if (value.contains("padsetpoint")) {setHeatPadSetpoint(settingsMap.padsetpoint.toString()); setDisplay("pads")}
-		if (value.contains("circontemp")) {device.updateSetting("circulatorOnTemp",[value: settingsMap.circontemp.toString(),type:"enum"]); setDisplay("status")}
+		if (value.contains("circontemp")) {setCirculatorSetpoint(settingsMap.circontemp.toString()); setDisplay("status")}
 		if (value.contains("autothreshold")) {device.updateSetting("fanAutoThreshold",[value: settingsMap.autothreshold.toString(),type:"enum"]); setDisplay("status")}
         runIn(1,resetVariableValue)
 
         } catch (Exception ex) {
-            sendEvent(name: "variable", value: "MAP ERROR", )
+            sendEvent(name: "variable", value: "MAP ERROR")
 			runIn(3,resetVariableValue)
             logDebug("Error updating from variable Map: ${ex}")
         }
@@ -376,7 +403,7 @@ def setVariable(value) {
 
 // default variable value is a space for command tile
 def resetVariableValue() {
-    sendEvent(name: "variable", value: " ", )
+    sendEvent(name: "variable", value: " ")
 }
 
 // *** set the type of display after 100ms to allow time for states to update first ***
@@ -388,6 +415,7 @@ def setDisplay(type) {
 	if (type == "status" || type == "all") {runInMillis(100, setStatusDisplay)}
 	if (type == "temps" || type == "all") {runInMillis(100, setTempsDisplay)}
 	if (type == "pads" || type == "all") {runInMillis(100, setPadsDisplay)}
+	if (type == "circ" || type == "all") {runInMillis(100, setCirculateDisplay)}
 }
 def setEnabledDisplay() {
 	def heaterCSS = "<font style='font-weight: bold;color:#bd3824'>"+device.currentValue("heater")+"</font>"
@@ -411,14 +439,11 @@ def setStatusDisplay() {
 
 	String displayStatus = "<p style='line-height:1.4;font-size:"+settings?.statusFontSize+"px;text-align:left;margin-left:25px;'>"+
 		"Vent Speed Control: "+autoFan+"<br>"+
-		"Vent Fan Speed: &nbsp;&nbsp;&emsp;"+device.currentValue("fanSpeed")+"<br><br>"+
+		"Vent Fan Speed: &nbsp;&nbsp;&emsp;"+device.currentValue("fanSpeed")+"<br>"+
+		"Vent Auto Threshold: "+settings?.fanAutoThreshold+"°F<br><br>"+
 
 		"Circulate with Vent: &nbsp;"+settings?.circulateVent+"<br>"+
-		"Circulate Heat only: &nbsp;"+settings?.circulateHeat+"<br>"+
-		"Circulate On Temp: &nbsp;&nbsp;"+settings?.circulatorOnTemp+"°F<br><br>"+
-
-		//"Med Speed Diff: "+settings?.fanMediumThreshold+"°F<br>"+
-		"Fan Auto Threshold: "+settings?.fanAutoThreshold+"°F"+
+		"Circulate Heat only: &nbsp;"+settings?.circulateHeat+"<br>"+	
 		"</p>"
 	sendEvent(name: "displayStatus", value: displayStatus, descriptionText: getDescriptionText("displayStatus set to ${displayStatus}"))
 }
@@ -452,9 +477,15 @@ def setSetpointsDisplay() {
 }
 def setPadsDisplay() {
 	String heatPadSet = "<p style='line-height:1.4;font-size:"+settings?.padsSetFontSize+"px;text-align:center;'>"+
-		" &nbsp;&nbsp;"+(device.currentValue("heatPadSetpoint"))+"°F<br>"+
+		" &nbsp;"+(device.currentValue("heatPadSetpoint"))+"°F<br>"+
 		"</p>"
 	sendEvent(name: "displayPadSet", value: heatPadSet, descriptionText: getDescriptionText("heatPadSet set to ${heatPadSet}"))	
+}
+def setCirculateDisplay() {
+	String circulateSet = "<p style='line-height:1.4;font-size:"+settings?.padsSetFontSize+"px;text-align:center;'>"+
+		" "+(device.currentValue("circulatorSetpoint"))+"°F<br>"+
+		"</p>"
+	sendEvent(name: "displayCircSet", value: circulateSet, descriptionText: getDescriptionText("heatPadSet set to ${heatPadSet}"))	
 }
 
 // **** Update attribute States ****
@@ -470,8 +501,19 @@ def setCirculatorState(cstate) {
 	logDebug "setCirculatorState(${cstate}) was called"
     sendEvent(name: "circulatorState", value: cstate, descriptionText: getDescriptionText("circulatorState set to ${cstate}")) 
     parent.circulatorStateController(cstate)
+	setCirculatorContact()
 	runInMillis(100, setStatusMessage)
 }
+
+def setCirculatorContact() {
+	def cstate = device.currentValue("circulatorState")
+	def temp = device.currentValue("temperature")
+	def circSet = Double.parseDouble(device.currentValue("circulatorSetpoint"))
+	def aboveTemp = temp >= circSet
+	if (cstate == "on" && aboveTemp) {setContact("open")} 
+	else {setContact("closed")}
+}
+
 def setFanState(fstate) {
 	logDebug "setFanState(${fstate}) was called"
     sendEvent(name: "fanState", value: fstate, descriptionText: getDescriptionText("fanState set to ${fstate}")) 
@@ -686,6 +728,8 @@ def checkAutoFanSpeed() {
 				if (speed == "high" && diff >= highDiff) {setFanSpeed("medium"); setDisplay("status"); logDebug("fan speed set to medium")}
 				else if (speed == "medium") {setFanSpeed("low"); setDisplay("status"); logDebug("fan speed set to low")}
 			} 
+		} else {
+			if (diff > autodiff && speed != "high") {setFanSpeed("high")}
 		}
 	} else {logDebug("No auto speed adjust - Not venting")}
 }
@@ -693,7 +737,7 @@ def checkAutoFanSpeed() {
 // turn the circulator fan on or off when idle based on the temp setpoint in settings 
 def circulatorOnWithTemp(temp) {
 	logDebug("circulatorOnwithTemp called with ${temp}")
-	def set = settings?.circulatorOnTemp.toBigDecimal()
+	def set = device.currentValue("circulatorSetpoint").toBigDecimal()
 	logDebug("temp > set is ${temp > set}")
 
 	if (device.currentValue("operatingState") == "idle"){
@@ -733,9 +777,22 @@ def setHeatPadSetpoint(temp) {
     runIn(1, manageCycle)	
 }
 
+def setCirculatorSetpoint(temp) {
+	logDebug "setCirculatorSetpoint(${temp}) was called"
+    sendEvent(name: "circulatorSetpoint", value: temp, descriptionText: getDescriptionText("circulatorSetpoint set to ${temp}"))
+	setCirculatorContact()
+	setDisplay("circ")
+	setDisplay("status")
+}
+
 def setPresence(state) {
 	logDebug "setPresence(${state}) was called"
     sendEvent(name: "presence", value: state, descriptionText: getDescriptionText("presence set to ${state}"))
+}
+
+def setContact(state) {
+	logDebug "setContact(${state}) was called"
+    sendEvent(name: "contact", value: state, descriptionText: getDescriptionText("contact set to ${state}"))
 }
 
 def setHysteresis(value) {
