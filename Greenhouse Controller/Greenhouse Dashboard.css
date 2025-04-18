@@ -5,6 +5,21 @@
     background-color:transparent !important;
     border:none;
 }
+/*  Background Image Resize*/
+/*#tile-0 .image {
+     top: 0px !important;
+    right: 0px !important;
+    bottom: 0px !important;
+    top: -95px !important; 
+    left: -10px !important;
+    width: 1550px !important;
+    height: 925px !important;  
+}*/
+
+/* change the icon size for thermostat pad setpoint arrows 
+#tile-39 .tile-primary.low i.material-icons.he-fan_low {
+    font-size: 0px !important;
+} */
 
 /* make vent fan blade tile be transparent */
 #tile-39 {
@@ -44,8 +59,8 @@
     overflow: unset;
 }
 
-/* make heat pad setpoint tile be transparent */
-#tile-30 {
+/* make heat pad and circulate setpoint tiles be transparent */
+#tile-45, #tile-43 {
     z-index:0 !important;
     text-shadow:none;
     background-color:transparent !important;
@@ -58,6 +73,11 @@
     text-shadow:none;
     background-color:transparent !important;
     border:none;
+}
+
+/* make circulate contact tile be behind */
+#tile-46{
+    z-index:-10 !important;
 }
 
 /* make message transparent */
@@ -90,9 +110,12 @@
 #tile-13 .tile-tertiary { display: none; visibility: hidden; }
 
 /* remove title displayAll and replace title on heat pad setpoint */
-#tile-5 .tile-title,#tile-30 .tile-title { visibility: hidden; }
-#tile-30 .tile-title:after { visibility: visible !important; position: absolute; left: 50%; top: 60%; transform: translate(-50%, -50%); overflow: hidden;
-     white-space: nowrap !important; font-size: 10px !important; content: "Heat Pads Setpoint" !important; }
+#tile-5 .tile-title,#tile-45 .tile-title { visibility: hidden; }
+#tile-45 .tile-title:after { visibility: visible !important; position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); overflow: hidden;
+     white-space: nowrap !important; font-size: 12px !important; content: "Heat Pads Set" !important; }
+#tile-43 .tile-title { visibility: hidden; }     
+#tile-43 .tile-title:after { visibility: visible !important; position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); overflow: hidden;
+    white-space: nowrap !important; font-size: 12px !important; content: "Circulate On Temp" !important; }
 
 /* Remove and replace the title for circulate vent and circulate heat toggle buttons */
 #tile-37 .tile-title,#tile-38 .tile-title { visibility: hidden; }
@@ -103,6 +126,14 @@
 
 /* Remove Icons for circ vent and circ heat buttons */
 #tile-37 .tile-primary i.material-icons:before, #tile-38 .tile-primary i.material-icons:before{display:none}
+
+/* remove icon and title circ contact */
+#tile-46 .tile-primary i.material-icons:before{display:none}
+#tile-46 .tile-title {
+    visibility: hidden;
+    white-space: nowrap !important;
+    overflow: unset;
+}
 
 /* replace title sensors */
 #tile-1 .tile-title, #tile-2 .tile-title { visibility: hidden; }
@@ -134,13 +165,50 @@
      white-space: nowrap !important; content: "Vent Fan" !important; }
 
 
-/* remove title for pad setpoint arrows*/
-#tile-28 .tile-title, #tile-29 .tile-title { visibility: hidden; }  
+/* remove title for pad and circulator setpoint arrows*/
+#tile-28 .tile-title, #tile-29 .tile-title,#tile-41 .tile-title, #tile-42 .tile-title { visibility: hidden; }  
+
+/* change position of the down pad setpoint arrow*/
+#tile-29 .he-circle-down {
+    position: absolute;
+    top: 20px;
+    left: 10px;
+}
+/* change position of the up pad setpoint arrow*/
+#tile-28 .he-circle-up {
+    position: absolute;
+    top: 20px;
+    left: 38px;
+}
+/* change position of the down circulator setpoint arrow*/
+#tile-41 .he-circle-down {
+    position: absolute;
+    top: 20px;
+    left: 5px;
+}
+/* change position of the up Circulator setpoint arrow*/
+#tile-42 .he-circle-up {
+    position: absolute;
+    top: 20px;
+    left: 35px;
+}
+/* make heat pad and circulator arrow buttons on top and transparent */
+#tile-28, #tile-29,#tile-41, #tile-42 {
+    z-index:50 !important;
+    text-shadow:none;
+    background-color:transparent !important;
+    border:none;
+}
 
 /* Remove the title on thermostat tile to make room for the setpoints display */
 #tile-27 div.bottom-0 {
     visibility: hidden;
 }
+
+/* change the icon size for pad and circulator setpoint arrows */
+#tile-28 .tile-primary i.material-icons, #tile-29 .tile-primary i.material-icons,#tile-41 .tile-primary i.material-icons, #tile-42 .tile-primary i.material-icons{
+    font-size: 20px !important;
+} 
 
 /* change the title of the variable command tile*/
 #tile-36 div.flex-grow-0 {
@@ -150,19 +218,6 @@
 }
 #tile-36 div.flex-grow-0:after { visibility: visible !important; position: absolute; left: 50%; top: 80%; transform: translate(-50%, -50%); overflow: hidden;
     white-space: nowrap !important; content: "Command" !important; }
-
-/* change the icon size for pad setpoint arrows */
-#tile-28 .tile-primary i.material-icons, #tile-29 .tile-primary i.material-icons{
-    font-size: 20px !important;
-} 
-
-/* make heat pad buttons on top and transparent */
-#tile-28, #tile-29 {
-    z-index:50 !important;
-    text-shadow:none;
-    background-color:transparent !important;
-    border:none;
-}
 
 /* Motion tile transparent */
 #tile-13 {
@@ -174,7 +229,7 @@
 /* Vent Fan Blades*/
 #tile-39 .tile-primary i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/greenhouse-fan-blade.svg");
+    background-image:url("https://pathToIcons/greenhouse-fan-blade.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -204,8 +259,8 @@
 /* Motion icon only shows when active*/
 #tile-13 .tile-primary.active i.material-icons:before{
     content: "";
-    /* background-image:url("https://image-url-here/person-walking-green-outline.svg"); */
-    background-image:url("https://image-url-here/woman-plants.svg");
+    /* background-image:url("https://pathToIcons/person-walking-green-outline.svg"); */
+    background-image:url("https://pathToIcons/woman-plants.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -218,7 +273,7 @@
 }
 #tile-13 .tile-primary.inactive i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/blank.svg");
+    background-image:url("https://pathToIcons/blank.svg");
     display: inline-block;
     /*size of your icon image*/
     height: 85px;
@@ -232,7 +287,7 @@
  /* heat pads icons on */
 #tile-14 .tile-primary.on i.material-icons:before,#tile-15 .tile-primary.on i.material-icons:before,#tile-16 .tile-primary.on i.material-icons:before,#tile-24 .tile-primary.on i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/fire-flame-hot.svg");
+    background-image:url("https://pathToIcons/fire-flame-hot.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -254,7 +309,7 @@
 /* Heat */
 #tile-7 .tile-primary.on i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/heater-on-icon.svg");
+    background-image:url("https://pathToIcons/heater-on-icon.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -268,7 +323,7 @@
 
 #tile-7 .tile-primary.off i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/heater-off-icon.svg");
+    background-image:url("https://pathToIcons/heater-off-icon.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -283,7 +338,7 @@
   /* Vent Fan frame */
   #tile-6 .tile-primary i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/greenhouse-fan-frame.svg");
+    background-image:url("https://pathToIcons/greenhouse-fan-frame.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -298,7 +353,7 @@
 /* heat pad icons off */
 #tile-14 .tile-primary.off i.material-icons:before,#tile-15 .tile-primary.off i.material-icons:before,#tile-16 .tile-primary.off i.material-icons:before,#tile-24 .tile-primary.off i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/off-power.svg");
+    background-image:url("https://pathToIcons/off-power.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -313,7 +368,7 @@
 /* Enable/Disable buttons */
 #tile-21 .tile-primary i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/power-button-orange-icon.svg");
+    background-image:url("https://pathToIcons/power-button-orange-icon.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -326,7 +381,7 @@
 }
 #tile-20 .tile-primary i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/power-button-red-icon.svg");
+    background-image:url("https://pathToIcons/power-button-red-icon.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -339,7 +394,7 @@
 }
 #tile-22 .tile-primary i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/power-button-blue-icon.svg");
+    background-image:url("https://pathToIcons/power-button-blue-icon.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -352,7 +407,7 @@
 }
 #tile-26 .tile-primary i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/power-button-green-icon.svg");
+    background-image:url("https://pathToIcons/power-button-green-icon.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -380,7 +435,7 @@
 /* heat fllicker */
 #tile-40 .tile-primary.on i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/fire-flame-hot.svg");
+    background-image:url("https://pathToIcons/fire-flame-hot.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -393,7 +448,7 @@
 } 
 #tile-40 .tile-primary.off i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/blank.svg");
+    background-image:url("https://pathToIcons/blank.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/
@@ -412,7 +467,7 @@
 /* circulator */
 #tile-25 .tile-primary i.material-icons:before{
     content: "";
-    background-image:url("https://image-url-here/cooling-fan-ceiling-dark.svg");
+    background-image:url("https://pathToIcons/cooling-fan-ceiling-dark.svg");
     background-size: 100% 100%;
     display: inline-block;
     /*size of your icon image*/

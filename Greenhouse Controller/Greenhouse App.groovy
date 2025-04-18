@@ -195,6 +195,8 @@ def initialize() {
 
     subscribe(temperature, "temperature", setTemperature) 
     subscribe(fan, "switch", fanSwitchController) 
+    subscribe(fan, "speed", fanSpeedChangeController)
+
 }
 
 def setGreenhouseDevice() {
@@ -234,6 +236,7 @@ def createGreenhouseDevice() {
 
 // ** Log to Google - Requires the log to google device**
 def logToGoogle() {
+    logDebug("logToGoogle Called")
     if (googleLogging) {
 
         def onHeat = 0
@@ -256,6 +259,7 @@ def logToGoogle() {
         def logParams = "Temperature="+temperature+"&Humidity="+greenHouseHumidity+"&On Heat="+onHeat+"&On Cool="+onCool+"&Heat Point="+heatingSetpoint+"&Cool Point="+
         coolingSetpoint+"&On Pad="+onPad+"&Pad Point="+heatPadSetpoint+"&Outside Temp="+outsideTemp+"&Power="+power
         googleLogs.sendLog("Greenhouse", logParams) 
+        logDebug("Log Sent")
     }
 }
 
@@ -283,6 +287,16 @@ def fanSwitchController(evt) {
     if (evt.value == "off" && fanState == "on") {greenhouseDriver.setFanState("off")}
 }
 
+// update vent fan state in greenhouse controller when switch device changes
+def fanSpeedChangeController(evt) {
+    def newSpeed = evt.value
+    logDebug("Vent Fan speed device changed to ${newSpeed}")
+    def fanSpeed = greenhouseDriver.currentValue("fanSpeed")
+    if (newSpeed != fanSpeed) {
+        logDebug("Updating vent fan speed attribute in driver to ${newSpeed} to match state")
+        greenhouseDriver.setFanSpeed(newSpeed) 
+    } 
+}
 
 // update circulator state in greenhouse controller when switch changes
 def circulatorSwitchController(evt) {
@@ -302,7 +316,7 @@ def setHumidity(evt) {
     def lvl = evt.value   //.toInteger()
 
     greenhouseDriver.setHumidity(lvl) 
-    runIn(1,logToGoogle)
+    //runIn(1,logToGoogle)
 }
 
 // Outside temp event - update driver
