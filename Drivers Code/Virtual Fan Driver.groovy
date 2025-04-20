@@ -27,7 +27,7 @@ metadata {
         attribute "supportedFanSpeeds", "JSON_OBJECT"
         attribute "level", "ENUM"
 
-        command "setSpeed", [[name:"setSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["on","off","low","medium","medium-high","high"]]]
+        command "setSpeed", [[name:"setSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["on","off","low","medium-low","medium","medium-high","high"]]]
         command "setSupportedFanSpeeds", ["JSON_OBJECT"]
         command "on"
         command "off"
@@ -62,7 +62,11 @@ def initialize() {
     sendEvent(name: "speed", value: "off", descriptionText: getDescriptionText("speed set to off"))
     sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch set to off"))
     sendEvent(name: "offMinutes", value: "30", descriptionText: getDescriptionText("offMinutes set to 30"))
-    sendEvent(name: "supportedFanSpeeds", value: '["low","medium","medium-high","high","on","off"]', descriptionText: getDescriptionText("supportedFanSpeeds set"))
+    sendEvent(name: "supportedFanSpeeds", value: '["low","medium","high","on","off"]', descriptionText: getDescriptionText("supportedFanSpeeds set"))
+}
+
+def setSupportedFanSpeeds(speedMap) {
+    sendEvent(name: "supportedFanSpeeds", value: speedMap)
 }
 
 def setOffMin(min) {
@@ -123,10 +127,6 @@ def setSpeedLevel(speed) {
     if (speed == "medium-high") {level = 70}
     if (speed == "high") {level = 100}
     if (speed != "off") sendEvent(name: "level", value: level, descriptionText: getDescriptionText("Level set to ${level}")) 
-}
-
-def setSupportedFanSpeeds(json) {
-    sendEvent(name: "supportedFanSpeeds", value: json, descriptionText: getDescriptionText("supportedFanSpeeds set to ${json}")) 
 }
 
 def autoTimerOff() {
