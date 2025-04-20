@@ -1,11 +1,10 @@
 /*
-	Virtual Fan Hood Driver 
+	Virtual Fan Driver 
 
 	Copyright 2025 -> ChrisB 
 
     Version 1.0 - 11/14/24
     Version 1.2 - 03/17/25 - updated to SwitchLevel, using speed range of three
-    Version 1.3 - 03/16/25 - updated to use Medium-high, using speed range of four
     Version 1.3 - 03/16/25 - fixed level defaulting to zero with setSpeedLevel of "on"
     Version 1.4 - 03/19/25  - fixed not turning on for state.speed being set to off when setting speed after a switch on event
 */
@@ -91,10 +90,9 @@ def setLevel(level) {
 
     def lvl = level.toInteger()
     if (lvl == 0) {setSpeed("off")}
-    if (lvl > 0 && lvl < 25) {setSpeed("low")}
-    if (lvl >= 25 && lvl < 50) {setSpeed("medium")}
-    if (lvl >= 50 && lvl < 75) {setSpeed("medium-high")}
-    if (lvl >= 75) {setSpeed("high")}
+    if (lvl > 0 && lvl < 33) {setSpeed("low")}
+    if (lvl >= 33 && lvl < 66) {setSpeed("medium")}
+    if (lvl >= 66) {setSpeed("high")}
     sendEvent(name: "level", value: level, descriptionText: getDescriptionText("Level set to ${level}")) 
 }
 
@@ -122,9 +120,8 @@ def setSpeedLevel(speed) {
 
     def level = device.currentValue("level")
     
-    if (speed == "low") {level = 20}
-    if (speed == "medium") {level = 45}
-    if (speed == "medium-high") {level = 70}
+    if (speed == "low") {level = 33}
+    if (speed == "medium") {level = 66}
     if (speed == "high") {level = 100}
     if (speed != "off") sendEvent(name: "level", value: level, descriptionText: getDescriptionText("Level set to ${level}")) 
 }
