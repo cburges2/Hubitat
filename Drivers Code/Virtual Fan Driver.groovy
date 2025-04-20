@@ -26,7 +26,7 @@ metadata {
         attribute "supportedFanSpeeds", "JSON_OBJECT"
         attribute "level", "ENUM"
 
-        command "setSpeed", [[name:"setSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["on","off","low","medium-low","medium","medium-high","high"]]]
+        command "setSpeed", [[name:"setSpeed",type:"ENUM", description:"Set Fan Speed", constraints:["on","off","low","medium-low","medium","high"]]]
         command "setSupportedFanSpeeds", ["JSON_OBJECT"]
         command "on"
         command "off"
@@ -105,7 +105,7 @@ def setSpeed(speed) {
     logDebug "setSpeed(${speed}) was called"
     if (speed == "off") {off()}
     else if (speed == "on") {on()}
-    else if (speed == "low" || speed == "medium" || speed == "medium-high" || speed == "high") {  
+    else if (speed == "low" || speed == "medium" || speed == "high") {  
         sendEvent(name: "speed", value: speed, descriptionText: getDescriptionText("speed set to ${speed}"))     
         if (device.currentValue("switch") == "off") {
             sendEvent(name: "switch", value: "on", descriptionText: getDescriptionText("switch on"))
