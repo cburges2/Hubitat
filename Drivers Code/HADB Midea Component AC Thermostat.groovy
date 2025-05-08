@@ -24,6 +24,7 @@ Change history:
 2.8  - mluck        - corrected typo
 2.12 - Yves Mercier - Add presets by name
 2.14 - Yves Mercier - Add support for humidity setting
+2.15 - cburgess     - Changed the name for new Midea driver, added correct modes for Midea AC and added thermostatOperatingState for dashboard tile,
 
 */
 
@@ -65,6 +66,7 @@ metadata
     attribute "maxHumidity", "number"
     attribute "minHumidity", "number"
     attribute "humiditySetpoint", "number"
+    attribute "thermostatOperatingState", "string"
 }
 
 void installed() {
@@ -112,6 +114,11 @@ void setHeatingSetpoint(BigDecimal temperature) {
 
 void setThermostatMode(String thermostatMode) {
     parent?.componentSetThermostatMode(this.device, thermostatMode)
+    if (thermostatMode == "cool") {sendEvent(name: "thermostatOperatingState", value: "cooling")}
+    else if (thermostatMode == "fan_only") {sendEvent(name: "thermostatOperatingState", value: "idle")}
+    else if (thermostatMode == "dry") {sendEvent(name: "thermostatOperatingState", value: "drying")}
+    else if (thermostatMode == "auto") {sendEvent(name: "thermostatOperatingState", value: "auto")}
+    else if (thermostatMode == "off") {sendEvent(name: "thermostatOperatingState", value: "off")}  
 }
 
 void setThermostatFanMode(String fanMode) {
