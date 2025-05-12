@@ -24,9 +24,9 @@ Change history:
 2.8  - mluck        - corrected typo
 2.12 - Yves Mercier - Add presets by name
 2.14 - Yves Mercier - Add support for humidity setting
-2.17 - cburgess     - Changed the name for new Midea driver, added correct modes for Midea AC and added thermostatOperatingState for dashboard tile,
-                      choice for fan_only mode operatingState in prefrences to be "fan only" or "idle". 
-
+2.17 - cburgess     - Modifed for Midea MAW12V1QWT U-Shaped AC. Changed the name to HADB Midea Component AC Thermostat, added correct mode and fan commands, and added 
+                      thermostatOperatingState attribute for dashboard tile, with a choice for the fan_only mode to be "fan only" or "idle", for operatingState.
+                      which is set from the thermostatMode value.   
 */
 
 metadata
