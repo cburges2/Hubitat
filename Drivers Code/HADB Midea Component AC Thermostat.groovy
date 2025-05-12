@@ -24,7 +24,8 @@ Change history:
 2.8  - mluck        - corrected typo
 2.12 - Yves Mercier - Add presets by name
 2.14 - Yves Mercier - Add support for humidity setting
-2.15 - cburgess     - Changed the name for new Midea driver, added correct modes for Midea AC and added thermostatOperatingState for dashboard tile,
+2.17 - cburgess     - Changed the name for new Midea driver, added correct modes for Midea AC and added thermostatOperatingState for dashboard tile,
+                      choice for fan_only mode operatingState in prefrences to be "fan only" or "idle". 
 
 */
 
@@ -44,6 +45,7 @@ metadata
     {
         input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
         input name: "txtEnable", type: "bool", title: "Enable descriptionText logging", defaultValue: true
+        input name: "fanOnlyState", type: "enum", title: "thermostatOperatingState for fan_only", description: "operating state value to use", defaultValue: "fan only", options:["fan only","idle"]
     }
 
     command "setPreset", [[name: "preset", type: "STRING", description: "Preset"]]
@@ -55,6 +57,7 @@ metadata
     command "fanMedium"
     command "fanHigh"
     command "fanMax"
+    command "setThermostatOperatingState", [[name:"thermostatOperatingState",type:"ENUM", description:"Thermostat operatingState to set", constraints:["fan only","idle","cooling","dry","auto","off"]]]
     command "setThermostatMode", [[name:"thermostatMode",type:"ENUM", description:"Thermostat mode to set", constraints:["fan_only","dry","cool","auto","off"]]]
     command "setThermostatFanMode", [[name:"thermostatFanMode",type:"ENUM", description:"Fan Mode to set", constraints:["silent","low","medium","high","auto","max"]]]
 
@@ -89,15 +92,19 @@ void parse(String description) { log.warn "parse(String description) not impleme
 
 void parse(List<Map> description) {
     description.each {
-        if (it.name in ["thermostatMode", "temperature", "thermostatOperatingState", "thermostatFanMode", "thermostatSetpoint", "coolingSetpoint", "heatingSetpoint", "supportedThermostatModes", "supportedThermostatFanModes", "supportedPresets", "currentPreset", "healthStatus", "maxHumidity", "minHumidity", "humidity", "humiditySetpoint"]) {
+        if (it.name in ["thermostatMode", "temperature", "thermostatFanMode", "thermostatSetpoint", "coolingSetpoint", "heatingSetpoint", "supportedThermostatModes", "supportedThermostatFanModes", "supportedPresets", "currentPreset", "healthStatus", "maxHumidity", "minHumidity", "humidity", "humiditySetpoint"]) {
             if (txtEnable) log.info it.descriptionText
             sendEvent(it)
         }
+        if (it.name == "thermostatMode") {
+            setThermostatOperatingState(it.value)
+        }        
     }
 }
 
 void off() {
     parent?.componentOff(this.device)
+    sendEvent(name: "thermostatOperatingState", value: "off")
 }
 
 void refresh() {
@@ -114,11 +121,19 @@ void setHeatingSetpoint(BigDecimal temperature) {
 
 void setThermostatMode(String thermostatMode) {
     parent?.componentSetThermostatMode(this.device, thermostatMode)
-    if (thermostatMode == "cool") {sendEvent(name: "thermostatOperatingState", value: "cooling")}
-    else if (thermostatMode == "fan_only") {sendEvent(name: "thermostatOperatingState", value: "idle")}
-    else if (thermostatMode == "dry") {sendEvent(name: "thermostatOperatingState", value: "drying")}
-    else if (thermostatMode == "auto") {sendEvent(name: "thermostatOperatingState", value: "auto")}
-    else if (thermostatMode == "off") {sendEvent(name: "thermostatOperatingState", value: "off")}  
+    setThermostatOperatingState(thermostatMode)
+}
+
+void setThermostatOperatingState(String thermostatMode) {
+    if (logEnable) log.debug "setThermostatOperatingState called with ${thermostatMode}"
+
+    if (thermostatMode != null) {
+        if (thermostatMode == "cool") {sendEvent(name: "thermostatOperatingState", value: "cooling")}
+        else if (thermostatMode == "fan_only") {sendEvent(name: "thermostatOperatingState", value: fanOnlyState)}  // set in prefrences
+        else if (thermostatMode == "dry") {sendEvent(name: "thermostatOperatingState", value: "drying")}
+        else if (thermostatMode == "auto") {sendEvent(name: "thermostatOperatingState", value: "auto")}
+        else if (thermostatMode == "off") {sendEvent(name: "thermostatOperatingState", value: "off")}  
+    }
 }
 
 void setThermostatFanMode(String fanMode) {
@@ -132,10 +147,12 @@ def setHumidity(humiditySetpoint) {
 
 void auto() {
     parent?.componentAuto(this.device)
+    sendEvent(name: "thermostatOperatingState", value: "auto")
 }
 
 void cool() {
     parent?.componentCool(this.device)
+    sendEvent(name: "thermostatOperatingState", value: "cooling")
 }
 
 void emergencyHeat() {
@@ -144,6 +161,7 @@ void emergencyHeat() {
 
 void fanOnly() {
     parent?.componentSetThermostatMode(this.device, "fan_only")
+    sendEvent(name: "thermostatOperatingState", value: fanOnlyState)
 }
 
 void fanSilent() {
@@ -168,6 +186,7 @@ void fanMax() {
 
 void dry() {
     parent?.componentSetThermostatMode(this.device, "dry")
+    sendEvent(name: "thermostatOperatingState", value: "drying")
 }
 
 void heat() {
