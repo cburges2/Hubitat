@@ -9,7 +9,7 @@
  *  v. 1.0 - 4/18/25 - Inital code
  *  v. 1.3 - 5/02/25 - Added log to google device option to log valve, sensor, and pump states on changes
  *  v. 1.5 - 5/10/25 - Added fill check while running, and overfill timer to go a bit above level when filling. 
- *  v. 1.6 - 5/13/25 - Added preference for overfill seconds
+ *  v. 1.7 - 5/13/25 - Added preference for overfill seconds and recheck minutes
 **/
 
 definition (
@@ -131,6 +131,18 @@ def mainPage() {
                 type: "enum",
                 title: "<font style='font-size:14px; color:#1a77c9'>Overfill Seconds (seconds to fill after sensor shows filled)</font>",
                 options: ["5":5, "10":10,"20":20,"30":30,"40":40,"50":50,"60":60],
+                multiple: false,
+                defaultValue: 30,
+                required: true
+            )
+        }
+
+        section("") {
+            input (
+                name: "fillCheck",
+                type: "enum",
+                title: "<font style='font-size:14px; color:#1a77c9'>Minutes interval to re-check level when running</font>",
+                options: ["600":10,"900":15,"1200":20,"1800":30,"2700":45,"3600":60,"5400":90,"7200":120],
                 multiple: false,
                 defaultValue: 30,
                 required: true
@@ -338,8 +350,9 @@ def checkFilled() {
         }    
     } else {logDebug("autoFill is off")}
 
-    if (powerOn) {
-        runIn(600, checkFilled)   // check every 10 minutes for fill
+    def recheckMins = fillCheck.toInteger() * 60
+    if (powerOn) {      
+        runIn(recheckMins, checkFilled)   // check every x minutes for fill as set
     } else {unschedule()}
 }
     
