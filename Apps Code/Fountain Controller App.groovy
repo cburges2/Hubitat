@@ -9,6 +9,7 @@
  *  v. 1.0 - 4/18/25 - Inital code
  *  v. 1.3 - 5/02/25 - Added log to google device option to log valve, sensor, and pump states on changes
  *  v. 1.5 - 5/10/25 - Added fill check while running, and overfill timer to go a bit above level when filling. 
+ *  v. 1.6 - 5/13/25 - Added preference for overfill seconds
 **/
 
 definition (
@@ -120,6 +121,18 @@ def mainPage() {
                 options: ["60":60, "90":90,"120":120,"180":180,"240":240,"300":300,"360":360,"420":420,"480":480,"540":540,"600":600],
                 multiple: false,
                 defaultValue: 60,
+                required: true
+            )
+        }
+
+        section("") {
+            input (
+                name: "overFill",
+                type: "enum",
+                title: "<font style='font-size:14px; color:#1a77c9'>Overfill Seconds (seconds to fill after sensor shows filled)</font>",
+                options: ["5":5, "10":10,"20":20,"30":30,"40":40,"50":50,"60":60],
+                multiple: false,
+                defaultValue: 30,
                 required: true
             )
         }
@@ -242,10 +255,11 @@ def fountainPower(evt) {
 def waterSensorController(evt) {
     logDebug("waterSensorController called with ${evt.value}")
     def sensor = evt.value
-
+    
     if (settings?.autoFill) {
         if (sensor == "open") {
-            runIn(30, stopFill)  // fill a bit over the sensor for 30 sec
+            def overSecs = overFill.toInteger()
+            runIn(overSecs, stopFill)  // fill a bit over the sensor for 30 sec
         } else if (sensor == "closed") {
             logToGoogle()
         }
