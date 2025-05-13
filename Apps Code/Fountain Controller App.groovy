@@ -195,7 +195,7 @@ def initialize() {
     if (onMotion) {subscribe(motionSensor, "motion", motionController)}
     subscribe(fillValve, "switch", valveController)
     subscribe(fountainSwitch, "switch", fountainPower)
-    subscribe(fillValve, "waterConsumed", logWater)
+    if (googleLogging) subscribe(fillValve, "waterConsumed", logWater)
 
     //if (autoFill) {schedule('0 0/50 * * * ?', checkFilled)}   // check every hour at :50
 }
