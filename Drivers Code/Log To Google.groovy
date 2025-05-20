@@ -1,8 +1,8 @@
 /*
 
-Log To Google
+Log To Google Device
 
-v 1.0 - 
+v 1.0 - 1/23/23
 
 */
 
@@ -14,6 +14,7 @@ metadata {
 	) { 
         
 		capability "Actuator"
+        capability "Initialize"
 
         //TYPES: ENUM, STRING, DYNAMIC_ENUM, JSON_OBJECT, NUMBER, DATE, VECTOR3
         attribute "googleUri", "string"
@@ -29,12 +30,11 @@ metadata {
         command "setCleanUri", ["string"]
         command "sendLog", [[name:"tab",type:"STRING", description:"Set Sheet Tab"],[name:"params",type:"STRING", description:"Set Log Params"]]
         command "cleanLog", [[name:"tab",type:"STRING", description:"Set Sheet Tab"],[name:"deleteDays",type:"STRING", description:"Set days to keep"]]
-        command "startCleanTimer", "number"
+        command "startCleanTimer", ["number"]
 	}
 
 	preferences {
 		input( name: "logEnable", type:"bool", title: "Enable logging",defaultValue: true)
-		//input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)     
         input (name: "logLevel",  type: "enum", title: "<font style='font-size:14px; color:#1a77c9'>Logging Level</font>", options: [1:"Info", 2:"Warning", 3:"Debug"], defaultValue: 2) 
 	}
 }
@@ -50,8 +50,7 @@ def updated() {
 	log.info "updated..."
 	//log.warn "debug logging is: ${logEnable == true}"
 	//log.warn "description logging is: ${txtEnable == true}"
-	//if (logEnable) runIn(1800,logsOff)
-	initialize()
+	//if (logEnable) runIn(1800,logsOff)	
     //state.deleteIndex = 0
 
     if (settings?.logEnable) {
@@ -63,6 +62,8 @@ def updated() {
             logDebug("Info logging Enabled",1)
         } else logDebug("Warning log level enabled",2)
     }    
+
+    initialize()
 }
 
 def initialize() {
@@ -104,7 +105,6 @@ def sendLog(tab,params) {
 		headers: ['CustomHeader':'CustomHeaderValue'],
 	]
     asynchttpGet('logCallbackMethod', getParams, [dataitem1: "datavalue1"])
-
 }
 
 def logCallbackMethod(response, data) {
@@ -121,26 +121,27 @@ def cleanLog(String tab, String days) {
 def cleanLogs() {
 
     def logs = [
-        "sheet=Light Levels&days=2",
         "sheet=Illuminance&days=5",
         "sheet=Grow Water&days=14",
         "sheet=Flower Water&days=14",
-        "sheet=Clone Water&days=14",
-        "sheet=Indoor Humidity&days=7",
-        "sheet=Intensity Level&days=2",
         "sheet=Attic&days=5",
-        "sheet=Bedroom Heat&days=1",
-        "sheet=Living Room heat&days=1",
-        ]
+        "sheet=Bedroom Heat&days=2",
+        "sheet=Living Room heat&days=2",
+        "sheet=Basement Heat&days=2",
+        "sheet=Bedroom AC&days=5",
+        "sheet=Solar Heater&days=5",
+        "sheet=Indoor Humidity&days=5",
+        "sheet=Pool Temperature&days=7",
+        "sheet=Shed Garden Water&days=7",
+        "sheet=Yard Garden Water&days=7",       
+        "sheet=Living Room AC&days=5",       
+        "sheet=Strawberry Garden Water&days=14",
+        "sheet=Greenhouse&days=3",
+        "sheet=Fountain&days=5"
+    ]
 
     def summerLogs = [
-        "sheet=Shed Garden Water&days=7",
-        "sheet=Yard Garden Water&days=7",
-        "sheet=Bedroom AC&days=5",
-        "sheet=Living Room AC&days=5",
-        "sheet=Solar Heater&days=5",
-        "sheet=Pool Temperature&days=7",
-        "sheet=Strawberry Garden Water&days=14",
+
     ]
 
     def inactive = [
@@ -151,13 +152,21 @@ def cleanLogs() {
     int index = state?.deleteIndex
 
     def log = logs[index]
-    getDelete(log)
+    logDebug("Log to clean is ${log}")
+    
 
     if (state?.deleteIndex == size) state.deleteIndex = 0
     else state.deleteIndex = state?.deleteIndex + 1
 
+    getDelete(log)
+
     def minutes = 720/size
+    state.cleanMinutes = minutes
     startCleanTimer(minutes)
+}
+
+def scheduleStartCleanTimer() {
+    startCleanTimer(30)
 }
 
 def getDelete(log) {
@@ -177,9 +186,9 @@ def getDelete(log) {
 }
 
 def cleanCallbackMethod(response, data) {
-    def resultCode = response.status.toInteger()
-    logDebug("status of get call to clean is: ${result}",3)
-    if (result != 200) logDebug("Failed Clean: ${result}",2)
+    //def resultCode = response.status.toInteger()
+    logDebug("Log Cleaned: ${result}",3)
+    //if (result != 200) logDebug("Failed Clean: ${result}",2)
 }
 
 def startCleanTimer(mins) {
