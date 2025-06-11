@@ -33,14 +33,6 @@ metadata {
 def installed() {
     log.warn "installed..." 
     device.updateSetting("txtEnable",[type:"bool",value:true])
-
-    state.key = [[value:"0", command:"Never Used"],[value:"99", command:"Reset"]]   
-    def i = ""
-    for (x=1; x<98; x++) {
-        i = x.toString()
-        state.key.add([value:i, command:""])
-    }
-    state.commands = [[value:"99", command:"Reset"]]
     initialize()
 }
 
