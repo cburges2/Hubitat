@@ -11,13 +11,12 @@ metadata {
             namespace: "hubitat",
             author: "Chris B"
     ) {
-        capability "Light"
+
         capability "Switch"
         capability "Switch Level"
-        capability "ChangeLevel"
-        capability "Actuator"
 
-        attribute "command", "ENUM"
+        attribute "level", "NUMBER"
+        attribute "switch", "ENUM"
 
 }
 
@@ -33,6 +32,9 @@ metadata {
 def installed() {
     log.warn "installed..." 
     device.updateSetting("txtEnable",[type:"bool",value:true])
+    sendEvent(name: "switch", value: "on")
+    sendEvent(name: "level", value: "99")
+
     initialize()
 }
 
@@ -46,9 +48,7 @@ def updated() {
 }
 
 def initialize() {
-    if (state?.lastRunningMode == null) {    
-
-    }   
+  
 } 
 
 def parse(String description) { noCommands("parse") }
@@ -61,15 +61,11 @@ private eventSend(name,verb,value,unit = ""){
 }
 
 def off() {
-    String verb = (device.currentValue("switch") == "off") ? "is" : "was turned"
-    close()
-    eventSend("switch",verb,"off") 
+    sendEvent(name: "switch", value: "off")
 }
 
 def on() {
-    String verb = (device.currentValue("switch") == "on") ? "is" : "was turned"
-    open()
-    eventSend("switch",verb,"on")
+    sendEvent(name: "switch", value: "on")
 }
 
 def setLevel(value, rate = null) {
