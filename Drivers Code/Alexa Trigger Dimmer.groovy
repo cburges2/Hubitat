@@ -1,7 +1,8 @@
 /*
     Virtual Alexa Trigger Dimmer
 
-    Copyright 2022 -> C. Burgess
+    2024 -> C. Burgess
+
 
 */
 
@@ -9,7 +10,7 @@ metadata {
     definition (
             name: "Alexa Trigger Dimmer",
             namespace: "hubitat",
-            author: "Chris B"
+            author: "cburgess"
     ) {
 
         capability "Switch"
