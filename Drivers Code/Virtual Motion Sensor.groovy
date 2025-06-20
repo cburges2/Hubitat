@@ -72,6 +72,7 @@ def inactive() {
 
 def setInactive() {
 	logDebug "setInactive was called"
+	unschedule()
     sendEvent(name: "motion", value: "inactive", descriptionText: getDescriptionText("motion set to inactive"))
 }
 
