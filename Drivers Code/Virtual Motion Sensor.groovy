@@ -14,11 +14,11 @@ metadata {
 
         capability "Motion Sensor"	
 
-		attribute "motion"
+		attribute "motion", "ENUM"
 
 		// Commands needed to change internal attributes of virtual device.
-        command "setActive"
-        command "setInactive"
+        command "active"
+        command "inactive"
 }
 
 	preferences {
@@ -44,9 +44,7 @@ def updated() {
 }
 
 def initialize() {
-	if (state?.lastRunningMode == null) {    
 
-    }	
 }
 
 def parse(String description) { noCommands("parse") }
