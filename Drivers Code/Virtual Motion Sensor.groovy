@@ -8,11 +8,11 @@
 metadata {
 	definition (
 			name: "Virtual Motion Sensor",
-			namespace: "chrisb",
+			namespace: "hubitat",
 			author: "Chris B"
 	) {
 
-        capability "Motion Sensor"	//"active", "inactive"
+        capability "Motion Sensor"	
 
 		// Commands needed to change internal attributes of virtual device.
         command "setActive"
@@ -58,8 +58,6 @@ def logsOff(){
 	log.warn "debug logging disabled..."
 	device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
-
-// Commands needed to change internal attributes of virtual device.
 
 def setActive() {
 	logDebug "setActive was called"
