@@ -122,7 +122,9 @@ def componentOn(childDevice) {
     logDebug("componentOn(${childDevice}) called")
 
     if (device.currentValue("switch") == "on") {turnOffOtherSwitches(childDevice)}
-    else (logDebug("parent switch is off"))
+    else {
+        logDebug("parent switch is off")
+    }
 }    
 
 // component switch Turned Off - unused
@@ -162,7 +164,7 @@ def on() {
 }
 
 def off() {
-    sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch set to off"))    
+    sendEvent(name: "switch", value: "off", descriptionText: getDescriptionText("switch set to off"))   
 }
 
 def getDescriptionText(msg) {
