@@ -16,7 +16,9 @@
     To keep labels in sync with the state device map, only change child device labels (names) using the renameSwitchDevice(old,new) command. 
 
     10/26/25 - v. 1.0 - Inital Release
-    
+    10/28/25 - v. 1.1 - added TurnOnSwitchDevice() command to turn on a switch in the group (from an app or other automation)
+                      - added useAsAppChild prefrence, to call parent method setRadioSwitchActive(label) when a switch changes to active, 
+                        if the useAsAppChild preference is set to true. 
 */
 
 metadata {
@@ -31,12 +33,14 @@ metadata {
         command "addSwitchDevice", [[name: "label", type:"STRING", description:"Enter a Label to Create a New Radio Switch Device", defaultValue: ""]]
         command "removeSwitchDevice", [[name: "label", type:"STRING", description:"Enter a Label to Remove an Existing Radio Switch Device", defaultValue: ""]]
         command "renameSwitchDevice", [[name: "old Label", type:"STRING", description:"Enter a Label of the Device to Change Names", defaultValue: ""],[name: "new Label", type:"STRING", description:"Enter a new name to replace label in device", defaultValue: ""]]
+        command "turnOnSwitchDevice", [[name: "label", type:"STRING", description:"Enter a Label to turn on a Switch Device", defaultValue: ""]]
     }
 
     preferences {
         input name: "txtEnable", type: "bool", title: "Enable descriptionText logging", defaultValue: true
         input name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false
         input name: "buttonController", type:"bool", title: "Enable use as a button controller", defaultValue: false
+        input name: "useAsAppChild", type:"bool", title: "Enable to use as a child device for a custom app", description: "This will call the parent method radioSwitchActive(label) when a switch becomes active" ,defaultValue: false
     }
 }
 
@@ -76,7 +80,7 @@ def createSwitchChild(name) {
     
     try {
         def switchDevice = addChildDevice("hubitat", "Generic Component Virtual Switch", deviceNetworkId, [name: device.getLabel(), label: "${name}", isComponent: false])      
-        logDebug("Created child device in 'hubitat' using driver 'Virtual Switch' (DNI: ${deviceNetworkId})")
+        logDebug("Created child device in 'hubitat' using driver 'Generic Component Virtual Switch' (DNI: ${deviceNetworkId})")
         return deviceNetworkId
     } catch (Exception e) {
         log.error "Failed to create ${name} device: ${e}"
@@ -84,7 +88,7 @@ def createSwitchChild(name) {
     }
 }
 
-def getChildSwitch(label) {
+def getChildSwitchDevice(label) {
 
     def ID = state?.deviceMap["${label}"]
     logDebug("The ID of ${label} is ${ID}")
@@ -95,11 +99,17 @@ def getChildSwitch(label) {
 def renameSwitchDevice(label, newLabel) {
 
     def ID = state?.deviceMap["${label}"]
-    def device = getChildSwitch(label)
+    def thisDevice = getChildSwitchDevice(label)
 
-    device.setLabel(newLabel)   
+    thisDevice.setLabel(newLabel)   
     state.deviceMap.remove(label)
     state.deviceMap[newLabel] = ID
+}
+
+def turnOnSwitchDevice(label) {
+    def ID = state?.deviceMap["${label}"]
+    def thisDevice = getChildSwitchDevice(label)
+    thisDevice.on()
 }
 
 def removeSwitchDevice(label) {
@@ -150,6 +160,7 @@ def turnOffOtherSwitches(childDevice) {
         }
     }    
     sendEvent(name: "active", value: label, descriptionText: getDescriptionText("active set to ${label}"))
+    if (settings?.useAsAppChild) {parent?.setRadioSwitchActive(label)}
 
     if (settings?.buttonController) {
         logDebug("Button Controller Enabled")      
