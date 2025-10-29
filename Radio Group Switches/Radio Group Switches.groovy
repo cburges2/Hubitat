@@ -15,9 +15,9 @@
     Child devices are managed through this parent device. Create the child devices with the addSwitchDevice(label) command.  Remove with removeSwitchDevice(label).
     To keep labels in sync with the state device map, only change child device labels (names) using the renameSwitchDevice(old,new) command. 
 
-    10/26/25 - v. 1.0 - Inital Release
+    10/26/25 - v. 1.0 - Initial Release
     10/28/25 - v. 1.1 - added TurnOnSwitchDevice() command to turn on a switch in the group (from an app or other automation)
-                      - added useAsAppChild prefrence, to call parent method setRadioSwitchActive(label) when a switch changes to active, 
+                      - added useAsAppChild prefrence, to call parent method radioSwitchActive(label) when a switch changes to active, 
                         if the useAsAppChild preference is set to true. 
 */
 
@@ -160,7 +160,7 @@ def turnOffOtherSwitches(childDevice) {
         }
     }    
     sendEvent(name: "active", value: label, descriptionText: getDescriptionText("active set to ${label}"))
-    if (settings?.useAsAppChild) {parent?.setRadioSwitchActive(label)}
+    if (settings?.useAsAppChild) {parent?.radioSwitchActive(label)}
 
     if (settings?.buttonController) {
         logDebug("Button Controller Enabled")      
