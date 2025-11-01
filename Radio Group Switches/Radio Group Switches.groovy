@@ -17,8 +17,8 @@
 
     10/26/25 - v. 1.0 - Initial Release
     10/28/25 - v. 1.1 - added TurnOnSwitchDevice() command to turn on a switch in the group (from an app or other automation)
-                      - added useAsAppChild prefrence, to call parent method radioSwitchActive(label) when a switch changes to active, 
-                        if the useAsAppChild preference is set to true. 
+                      - added useAsAppChild prefrence, to call parent method radioSwitchActive(label) when a switch changes to active, if the useAsAppChild 
+                        preference is set to true. 
 */
 
 metadata {
@@ -130,7 +130,12 @@ def removeSwitchDevice(label) {
 // component switch Turned On
 def componentOn(childDevice) {
     logDebug("componentOn(${childDevice}) called")
+    def label = childDevice.getLabel()
 
+    if (settings?.useAsAppChild) {parent?.radioSwitchActive(label)}
+    sendEvent(name: "active", value: label, descriptionText: getDescriptionText("active set to ${label}"))
+    
+    // trun off others
     if (device.currentValue("switch") == "on") {turnOffOtherSwitches(childDevice)}
     else {
         logDebug("parent switch is off")
@@ -159,8 +164,6 @@ def turnOffOtherSwitches(childDevice) {
             if (otherDevice.currentValue("switch") == "on") {otherDevice.off()}
         }
     }    
-    sendEvent(name: "active", value: label, descriptionText: getDescriptionText("active set to ${label}"))
-    if (settings?.useAsAppChild) {parent?.radioSwitchActive(label)}
 
     if (settings?.buttonController) {
         logDebug("Button Controller Enabled")      

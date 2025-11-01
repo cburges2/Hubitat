@@ -3,7 +3,8 @@
 	Copyright 2016 -> 2020 Hubitat Inc. All Rights Reserved
 
     2025-10-26 - Chris B 
-        - Forked to Generic Component Virtual Switch with command attributes for use with radio group switches parent. Added delayOff() and offDelay prefrence    
+        - Forked to Generic Component Virtual Switch with the switch attribute added for use with a parent App with virtual switch control by user. 
+          Added delayOff() command and offDelay prefrence, and an autoOff prefrence for offDelay to be used by the switch to act as a button. 
     2020-04-16 2.2.0 maxwell
         -refactor
 	2018-12-15 maxwell
@@ -21,7 +22,8 @@ metadata {
     }
     preferences {
         input name: "txtEnable", type: "bool", title: "Enable descriptionText logging", defaultValue: true
-        input name: "offDelay", type: "enum", description: "Off Delay when used as a Radio button", title: "Button Off Delay", options: [[100:"100msec"],[200:"200msec"],[300:"300msec"],[400:"400msec"],[500:"500msec"],[600:"600msec"],[700:"700msec"],[800:"800msec"]], defaultValue: 500
+        input name: "autoOff", type: "bool", title: "Use as a button device where switch will auto turn off (instead of using delayOff command)", defaultValue: false
+        input name: "offDelay", type: "enum", description: "Off Delay with delayOff command or auto off", title: "Button Off Delay", options: [[100:"100msec"],[200:"200msec"],[300:"300msec"],[400:"400msec"],[500:"500msec"],[600:"600msec"],[700:"700msec"],[800:"800msec"]], defaultValue: 500
     }
 }
 
@@ -50,6 +52,7 @@ void parse(List description) {
 void on() {
     parent?.componentOn(this.device)
     sendEvent(name: "switch", value: "on", descriptionText: getDescriptionText("switch set to on"))
+    if (autoOff) delayOff()
 }
 
 void off() {
