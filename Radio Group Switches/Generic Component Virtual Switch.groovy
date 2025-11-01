@@ -50,9 +50,9 @@ void parse(List description) {
 }
 
 void on() {
-    parent?.componentOn(this.device)
     sendEvent(name: "switch", value: "on", descriptionText: getDescriptionText("switch set to on"))
     if (autoOff) delayOff()
+    parent?.componentOn(this.device)  
 }
 
 void off() {

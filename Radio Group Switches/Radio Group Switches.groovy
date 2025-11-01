@@ -130,16 +130,18 @@ def removeSwitchDevice(label) {
 // component switch Turned On
 def componentOn(childDevice) {
     logDebug("componentOn(${childDevice}) called")
-    def label = childDevice.getLabel()
-
-    if (settings?.useAsAppChild) {parent?.radioSwitchActive(label)}
-    sendEvent(name: "active", value: label, descriptionText: getDescriptionText("active set to ${label}"))
     
-    // trun off others
+    // turn off others
     if (device.currentValue("switch") == "on") {turnOffOtherSwitches(childDevice)}
     else {
         logDebug("parent switch is off")
     }
+
+    def label = childDevice.getLabel()
+    if (settings?.useAsAppChild) {parent?.radioSwitchActive(label)}
+    sendEvent(name: "active", value: label, descriptionText: getDescriptionText("active set to ${label}"))
+    
+
 }    
 
 // component switch Turned Off - unused
@@ -160,8 +162,8 @@ def turnOffOtherSwitches(childDevice) {
     def iDs = state?.deviceMap.collect{entry -> entry.value}
     iDs.each{ID -> 
         def otherDevice = getChildDevice(ID)
-        if (!label.equals(otherDevice.getLabel())) {
-            if (otherDevice.currentValue("switch") == "on") {otherDevice.off()}
+        if (!label.equals(otherDevice.getLabel())) {     
+            otherDevice.off()              
         }
     }    
 
