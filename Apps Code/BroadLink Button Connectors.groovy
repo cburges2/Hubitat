@@ -50,16 +50,6 @@ def mainPage() {
               multiple: false,
               submitOnChange: true             
             )
-
-            if (virtualButton) {
-                input (
-                    name: "trackVirtualButton", 
-                    type: "bool", 
-                    title: "Track Virtual Button Changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            } 
         }
 
         section("<b>BroadLink Button 1 Command</b>") {
