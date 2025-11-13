@@ -11,7 +11,7 @@
 definition (
     name: "Broadlink Button Connectors",
     namespace: "Hubitat",
-    author: "Burgess",
+    author: "Chris B",
     description: "Controller for virtual buttons to trigger broadlink RF code names in Broadlink driver",
     category: "My Apps",
     iconUrl: "",
@@ -24,6 +24,10 @@ preferences {
 
 def mainPage() {
     dynamicPage(name: "mainPage") {
+
+        section("App Name") {
+            label title: "", required: false
+        }      
 
         section("<b>Broadlink Device</b>") {
 
