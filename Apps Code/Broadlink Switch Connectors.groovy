@@ -109,16 +109,6 @@ lock
                 multiple: false,
                 submitOnChange: true             
                 )
-
-                if (virtualSwitch2) {
-                    input (
-                        name: "trackVirtualSwitch2", 
-                        type: "bool", 
-                        title: "Track Virtual Switch2 Changes", 
-                        required: true, 
-                        defaultValue: "true"
-                    )
-                } 
             }
 
         section("<b>BroadLink On Command 2</b>") {
@@ -172,16 +162,6 @@ lock
                     multiple: false,
                     submitOnChange: true             
                     )
-
-                    if (virtualSwitch2) {
-                        input (
-                            name: "trackVirtualSwitch3", 
-                            type: "bool", 
-                            title: "Track Virtual Switch3 Changes", 
-                            required: true, 
-                            defaultValue: "true"
-                        )
-                    } 
                 }
 
                 section("<b>BroadLink On Command 3</b>") {
@@ -235,16 +215,6 @@ lock
                         multiple: false,
                         submitOnChange: true             
                         )
-
-                        if (virtualSwitch4) {
-                            input (
-                                name: "trackVirtualSwitch4", 
-                                type: "bool", 
-                                title: "Track Virtual Switch4 Changes", 
-                                required: true, 
-                                defaultValue: "true"
-                            )
-                        } 
                     }
 
                     section("<b>BroadLink On Command 4</b>") {
@@ -298,16 +268,6 @@ lock
                             multiple: false,
                             submitOnChange: true             
                             )
-
-                            if (virtualSwitch4) {
-                                input (
-                                    name: "trackVirtualSwitch5", 
-                                    type: "bool", 
-                                    title: "Track Virtual Switch4 Changes", 
-                                    required: true, 
-                                    defaultValue: "true"
-                                )
-                            } 
                         }
 
                         section("<b>BroadLink On Command 5</b>") {
@@ -356,6 +316,7 @@ def installed() {
 }
 
 def updated() {
+    unsubscribe()
     initialize()
 }
 
