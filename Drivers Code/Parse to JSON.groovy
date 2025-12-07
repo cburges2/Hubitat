@@ -9,9 +9,9 @@ import groovy.json.JsonOutput
 
 metadata {
 	definition (
-			name: "Parse to Json",
-			namespace: "chrisb",
-			author: "Chris B"
+        name: "Parse to Json",
+        namespace: "chrisb",
+        author: "Chris B"
 	) {
 		capability "Actuator"
 
