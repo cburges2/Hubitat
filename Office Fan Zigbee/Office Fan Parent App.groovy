@@ -169,11 +169,13 @@ def initialize() {
         subscribe(fanSceneSwitch, "doubleTapped", fanSceneSwitchTimerHandler)  // control timer with a scene switch
     }
 
-    // for changes made on the Zigbee relay baord or with the rf board remote
+    // subscribe for changes made on the Zigbee relay baord or with the rf board remote
     subscribe(fanOsc, "switch", fanOscHandler) 
     subscribe(fanLow, "switch", fanLowHandler)
     subscribe(fanMedium, "switch", fanMediumHandler)
     subscribe(fanHigh, "switch", fanHighHandler)
+
+    subscribe(fanRelay, "switch", fanOnHandler)  // subscribe for sensing fan turned on any speed for autooff
 } 
 
 def setOscillate(status) {
@@ -282,7 +284,7 @@ def fanOnHigh() {
 }
 
 def fanOff() {
-    turnOffOtherSpeeds(true, true, true)
+    fanRelay.off() // turn off the whole board with parent relay
 }
 
 def turnOffOtherSpeeds(low, medium, high) {
@@ -308,10 +310,10 @@ def fanSceneSwitchHandler(evt) {
     def pressed = evt.value.toInteger()
     def speed = ""
 
-    if (pressed == 1) {speed = "off"} //turnFanOff();
-    if (pressed == 2) {speed = "low"} //fanLow.on(); 
-    if (pressed == 3) {speed = "medium"}//fanMedium.on(); 
-    if (pressed == 4) {speed = "high"} //fanHigh.on();
+    if (pressed == 1) {speed = "off"} 
+    if (pressed == 2) {speed = "low"}
+    if (pressed == 3) {speed = "medium"}
+    if (pressed == 4) {speed = "high"}
 
     fanDriver.setSpeed(speed)
 }
@@ -321,18 +323,16 @@ def turnFanOff() {
     fanOff()
 }
 
-// start timer when fan off relay triggers to off (meaning the fan was turned on)
-def fanOffHandler(evt) {
-    logDebug("fanOffHandler called with ${evt.value}")
+// start timer when fan turns on to any speed (board switch turns on)
+def fanOnHandler(evt) {
+    logDebug("fanOnHandler called with ${evt.value}")
     
-    if (evt.value == "off") {         // fan On
+    if (evt.value == "on") {         // fan On
         def timerMinutes = (settings?.autoOff).toInteger()
         logDebug("timerMinutes is ${timerMinutes}")
         if (settings?.useAutoOff) runIn(timerMinutes,turnFanOff)
-        if (stoveLight && useStoveLight) {stoveLight.on()}
     }
-    if (evt.value == "on") {        // Fan Off
-        setSpeed("off")
+    if (evt.value == "off") {        // Fan Off
         unschedule()
     }  
 }
@@ -385,6 +385,8 @@ def fanOscHandler(evt) {
     }    
 }
 
+// For rf remote or board buttons, lets a speed button act as off when pressed while current speed matches button
+// could be done by checking driver speed, but hardware check is safer
 def checkOtherSpeedsOff(speed) {
     logDebug("checkOtherSpeedsOff(${speed}) called")
     def othersOff = false
@@ -399,11 +401,6 @@ def checkOtherSpeedsOff(speed) {
 
     logDebug("returning ${othersOff}")
     return othersOff
-}
-
-// get bool to check if fan is on true/false
-boolean fanIsOn() {
-    return fanOff.currentValue("switch") == "off"
 }
 
 def logDebug(txt){
