@@ -1,10 +1,9 @@
 /*
 	Office Fan Child Driver - Works in conjunction with the Office Fan Parent App.  This driver allows access to fan conroller app as if it were a multi-speed fan device
 
-	Copyright 2024 -> ChrisB 
+	Copyright 2025 -> ChrisB 
 
-    Version 1.0 - 11/14/24
-    Version 1.1 - 11/15/24 - Fixed timer not always being turned on when autoOFf enabled
+    Version 1.0 - 12/19/25 - Forked from Fan Hood Child Driver
 
 */
 

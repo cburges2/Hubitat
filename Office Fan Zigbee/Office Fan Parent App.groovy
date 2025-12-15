@@ -2,25 +2,23 @@
  *  **************** Office Fan Parent App ****************
  *
  *  Usage:
- *  This was designed to run a converted stove hood fan using relays to control the fan with three speeds 
- *  Each speed switch device is part of a 4-channel relay board, set to jog mode so that any other switches turn off when one is turned on
- *  The last relay is used as off, since the board will turn off any other speed relays when it is turned on in jog mode. 
+ *  This was designed to run a converted tower fan using relays to control the fan with three speeds 
+ *  Each speed switch device is part of a 4-channel relay board.
+ *  The last relay is used as Oscillate mode, powering the oscillate motor. 
 
  *  Requirements:  
- *  A four channel smart relay baord with jog mode
-*   Three of the relays have been physically attached to supply voltage to the appropriate motor wires for low, medium and high.  
-*   The board I am using needs 5v usb, or 7-48v).  An external power supply may be needed if the required voltage is not avaialbe on the hood's board. 
+ *  A four channel smart Ziogbee relay baord 
+*   Three of the relays have been physically attached to supply voltage to the appropriate motor wires for low, medium and high, and Oscillate
+*   The board I am using needs 5v usb, or 7-48v).  An external power supply may be needed. 
 *
-*   Version 1.0 - 11/14/24
-*   Version 1.1 - 11/15/24 - Added optional stove light device which if added in prefrences, will turn on when the fan turns on
-*   Version 2.0 - 11/21/25 - Forked to be the child device of the parent app and call parent methods.  
+*   Version 1.0 - 12/15/25 - Forked from Fan Hood Parent app.  
 **/
 
 definition (
     name: "Office Fan Parent App",
     namespace: "Hubitat",
     author: "ChrisB",
-    description: "Controller for a Converted Office Fan using Relays",
+    description: "Controller for a Converted Tower Fan using Relays",
     category: "My Apps",
     iconUrl: "",
     iconX2Url: ""
@@ -227,7 +225,6 @@ def fanSpeedHandler(speed) {
     else if (speed == "medium") {fanOnMed()}
     else if (speed == "high") {fanOnHigh()}
 
-    //else {setSpeed(speed)}
 } 
 
 def fanSwitchHandler(status, speed) {
@@ -239,7 +236,7 @@ def fanSwitchHandler(status, speed) {
     }
 }
 
-// set the fan hood fan to the driver speed from child device
+// set the fan to the driver speed from child device
 def setSpeed(speed) {
 
     def action = ""
