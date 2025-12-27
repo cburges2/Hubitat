@@ -194,3 +194,8 @@ def logDebug(txt){
         log.error("bad debug message")
     }
 }
+
+def logsOff(){
+	log.warn "debug logging disabled..."
+	device.updateSetting("logEnable",[value:"false",type:"bool"])
+}
