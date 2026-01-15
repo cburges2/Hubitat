@@ -22,6 +22,7 @@
  *  V1.1.0 - Deepseek Added solar irradiance calculation and incidence angle preference
  *  V1.2.0 - Deepseek Added Lux calculation and attribute
  *  V1.2.1 - Fixed solar spectrum preference application in all conversion methods
+ *  V1.2.2 - Added debug logging preference and illuminance offset preference
  */
 
 metadata {
@@ -51,13 +52,20 @@ metadata {
         section("Lux Conversion Settings") {
             input "solarSpectrum", "enum", title: "Solar Spectrum Type:", description: "Affects W/m² to lux conversion", required: true, defaultValue: "Direct Sunlight", options: ["Direct Sunlight", "Overcast Sky", "Clear Sky", "CIE Standard Illuminant D65"]
             input "conversionMethod", "enum", title: "Conversion Method:", description: "Method for W/m² to lux conversion", required: true, defaultValue: "Average Efficacy", options: ["Average Efficacy", "Solar Constant Based", "Photopic Luminous Efficacy"]
+            input "illuminanceOffset", "number", title: "Illuminance Offset (lux)", description: "Adjust final lux value (positive or negative)", required: false, defaultValue: 0
             input name: "luxInfo", type: "text", title: "Note:", description: "Lux measures visible light intensity to human eye"
+        }
+        section("Debug Settings") {
+            input "enableDebug", "bool", title: "Enable Debug Logging", description: "Log detailed calculation information", defaultValue: false
+            input name: "debugInfo", type: "text", title: "Note:", description: "Debug logs will appear in Hubitat logs"
         }
     }
 }
 
 def updated() {
-    log.debug "updated()"
+    logDebug "updated()"
+    logDebug "Debug logging enabled: ${settings?.enableDebug}"
+    logDebug "Illuminance offset: ${settings?.illuminanceOffset} lux"
 
     unschedule()
     refresh()
@@ -76,14 +84,33 @@ def refresh()
     def coords = getPosition()
     def irradiance = calculateSolarIrradiance(coords.altitude, coords.azimuth)
     def lux = calculateLux(irradiance, coords.altitude)
+    
+    // Apply illuminance offset if configured
+    def finalLux = applyIlluminanceOffset(lux)
+    
+    logDebug "Raw calculated lux: ${lux}, After offset: ${finalLux}"
 
     sendEvent(name: "altitude", value: coords.altitude)
     sendEvent(name: "azimuth", value: coords.azimuth)
     sendEvent(name: "solarIrradiance", value: irradiance, unit: "W/m²")
-    sendEvent(name: "illuminance", value: lux, unit: "lux")
+    sendEvent(name: "illuminance", value: finalLux, unit: "lux")
     sendEvent(name: "lastCalculated", value: new Date().format("yyyy-MM-dd h:mm", location.timeZone))
 
-    log.debug "SunCalc: Altitude: ${coords.altitude}°, Azimuth: ${coords.azimuth}°, Irradiance: ${irradiance} W/m², Illuminance: ${lux} lux"
+    logDebug "SunCalc: Altitude: ${coords.altitude}°, Azimuth: ${coords.azimuth}°, Irradiance: ${irradiance} W/m², Illuminance: ${finalLux} lux"
+}
+
+def applyIlluminanceOffset(luxValue) {
+    def offset = settings?.illuminanceOffset ?: 0
+    if (offset instanceof String && offset.isNumber()) {
+        offset = offset.toDouble()
+    } else if (offset instanceof Integer || offset instanceof BigDecimal) {
+        offset = offset.toDouble()
+    }
+    
+    def offsetLux = luxValue + offset
+    
+    // Ensure lux doesn't go below 0
+    return Math.max(0, offsetLux)
 }
 
 ///
@@ -167,6 +194,7 @@ def getPosition() {
 def calculateSolarIrradiance(altitude, azimuth) {
     // Return 0 if sun is below horizon
     if (altitude <= 0) {
+        logDebug "Sun below horizon (altitude: ${altitude}°), returning 0 irradiance"
         return 0.0
     }
 
@@ -176,6 +204,8 @@ def calculateSolarIrradiance(altitude, azimuth) {
     def pressure = (settings?.atmosphericPressure ?: 1013.25).toBigDecimal()
     def turbidity = settings?.turbidity ?: 3.0
 
+    logDebug "Calculating solar irradiance: altitude=${altitude}°, azimuth=${azimuth}°, incidenceAngle=${incidenceAngleDeg}°, pressure=${pressure}hPa, turbidity=${turbidity}"
+
     // Calculate solar irradiance
     def irradiance = calculateDirectRadiation(altitude, pressure, turbidity)
     def diffuseIrradiance = calculateDiffuseRadiation(altitude, turbidity)
@@ -183,6 +213,8 @@ def calculateSolarIrradiance(altitude, azimuth) {
     // Calculate total irradiance on a surface with given incidence angle
     def totalIrradiance = calculateSurfaceIrradiance(irradiance, diffuseIrradiance, altitude, azimuth, incidenceAngleDeg)
 
+    logDebug "Irradiance results: direct=${irradiance}, diffuse=${diffuseIrradiance}, total=${totalIrradiance} W/m²"
+    
     return Math.round(totalIrradiance * 10) / 10.0 // Round to 1 decimal place
 }
 
@@ -207,6 +239,8 @@ def calculateDirectRadiation(altitude, pressure, turbidity) {
     // Direct normal irradiance
     def directIrradiance = extraterrestrial * transmittance * Math.sin(altitudeRad)
 
+    logDebug "Direct radiation: dayOfYear=${dayOfYear}, eccentricity=${eccentricity}, airMass=${airMass}, transmittance=${transmittance}, directIrradiance=${directIrradiance}"
+
     return Math.max(0, directIrradiance)
 }
 
@@ -217,6 +251,9 @@ def calculateAirMass(altitude, pressure) {
 
     // Adjust for atmospheric pressure
     def pressureRatio = (pressure.toBigDecimal() / 1013.25.toBigDecimal())
+    
+    logDebug "Air mass calculation: altitudeRad=${altitudeRad}, rawAirMass=${airMass}, pressureRatio=${pressureRatio}, finalAirMass=${airMass * pressureRatio}"
+    
     return airMass * pressureRatio
 }
 
@@ -233,6 +270,8 @@ def calculateDiffuseRadiation(altitude, turbidity) {
     def baseIrradiance = 1367.0 * eccentricity * Math.sin(altitudeRad)
 
     def diffuseIrradiance = baseIrradiance * diffuseFraction
+
+    logDebug "Diffuse radiation: altitudeRad=${altitudeRad}, diffuseFraction=${diffuseFraction}, baseIrradiance=${baseIrradiance}, diffuseIrradiance=${diffuseIrradiance}"
 
     return Math.max(0, diffuseIrradiance)
 }
@@ -281,6 +320,8 @@ def calculateSurfaceIrradiance(directIrradiance, diffuseIrradiance, altitude, az
     // Total irradiance on surface
     def totalIrradiance = directOnSurface + diffuseOnSurface + groundReflected
 
+    logDebug "Surface irradiance: cosIncidence=${cosIncidence}, directOnSurface=${directOnSurface}, diffuseOnSurface=${diffuseOnSurface}, groundReflected=${groundReflected}, total=${totalIrradiance}"
+
     return Math.max(0, totalIrradiance)
 }
 
@@ -291,6 +332,7 @@ def calculateSurfaceIrradiance(directIrradiance, diffuseIrradiance, altitude, az
 def calculateLux(irradiance, altitude) {
     // Return 0 if no solar irradiance
     if (irradiance <= 0 || altitude <= 0) {
+        logDebug "No solar irradiance (irradiance=${irradiance}, altitude=${altitude}), returning 0 lux"
         return 0
     }
 
@@ -304,19 +346,19 @@ def calculateLux(irradiance, altitude) {
     switch(spectrumType) {
         case "Direct Sunlight":
             efficacy = 120.0
-            log.debug "Using Direct Sunlight efficacy: 120 lm/W"
+            logDebug "Using Direct Sunlight efficacy: 120 lm/W"
             break
         case "Overcast Sky":
             efficacy = 140.0
-            log.debug "Using Overcast Sky efficacy: 140 lm/W"
+            logDebug "Using Overcast Sky efficacy: 140 lm/W"
             break
         case "Clear Sky":
             efficacy = 125.0
-            log.debug "Using Clear Sky efficacy: 125 lm/W"
+            logDebug "Using Clear Sky efficacy: 125 lm/W"
             break
         case "CIE Standard Illuminant D65":
             efficacy = 130.0
-            log.debug "Using CIE Standard Illuminant D65 efficacy: 130 lm/W"
+            logDebug "Using CIE Standard Illuminant D65 efficacy: 130 lm/W"
             break
     }
 
@@ -327,7 +369,7 @@ def calculateLux(irradiance, altitude) {
         case "Average Efficacy":
             // Simple multiplication by luminous efficacy
             luxValue = irradiance * efficacy
-            log.debug "Average Efficacy: ${irradiance} W/m² × ${efficacy} lm/W = ${luxValue} lux"
+            logDebug "Average Efficacy: ${irradiance} W/m² × ${efficacy} lm/W = ${luxValue} lux"
             break
             
         case "Solar Constant Based":
@@ -343,9 +385,10 @@ def calculateLux(irradiance, altitude) {
             // Scale by actual irradiance ratio
             luxValue = (irradiance / (solarConstant * eccentricity * Math.sin(altitudeRad))) * maxLux
             
-            log.debug "Solar Constant Based: irradianceRatio = ${irradiance} / ${solarConstant * eccentricity * Math.sin(altitudeRad)} = ${irradiance / (solarConstant * eccentricity * Math.sin(altitudeRad))}"
-            log.debug "Solar Constant Based: maxLux = ${solarConstant * eccentricity * Math.sin(altitudeRad)} × ${efficacy} = ${maxLux}"
-            log.debug "Solar Constant Based: ${irradiance / (solarConstant * eccentricity * Math.sin(altitudeRad))} × ${maxLux} = ${luxValue} lux"
+            logDebug "Solar Constant Based: dayOfYear=${dayOfYear}, eccentricity=${eccentricity}, altitudeRad=${altitudeRad}"
+            logDebug "Solar Constant Based: irradianceRatio = ${irradiance} / ${solarConstant * eccentricity * Math.sin(altitudeRad)} = ${irradiance / (solarConstant * eccentricity * Math.sin(altitudeRad))}"
+            logDebug "Solar Constant Based: maxLux = ${solarConstant * eccentricity * Math.sin(altitudeRad)} × ${efficacy} = ${maxLux}"
+            logDebug "Solar Constant Based: ${irradiance / (solarConstant * eccentricity * Math.sin(altitudeRad))} × ${maxLux} = ${luxValue} lux"
             break
             
         case "Photopic Luminous Efficacy":
@@ -354,8 +397,8 @@ def calculateLux(irradiance, altitude) {
             def altitudeFactor = 0.8 + (altitude / 90.0) * 0.4
             luxValue = irradiance * efficacy * altitudeFactor
             
-            log.debug "Photopic Luminous Efficacy: altitudeFactor = 0.8 + (${altitude}/90)×0.4 = ${altitudeFactor}"
-            log.debug "Photopic Luminous Efficacy: ${irradiance} × ${efficacy} × ${altitudeFactor} = ${luxValue} lux"
+            logDebug "Photopic Luminous Efficacy: altitudeFactor = 0.8 + (${altitude}/90)×0.4 = ${altitudeFactor}"
+            logDebug "Photopic Luminous Efficacy: ${irradiance} × ${efficacy} × ${altitudeFactor} = ${luxValue} lux"
             break
     }
 
@@ -367,10 +410,24 @@ def calculateLux(irradiance, altitude) {
     luxDouble = Math.max(minValue, luxDouble)
     
     // Log final value for debugging
-    log.debug "Final lux calculation: ${luxDouble} lux (rounded to ${Math.round(luxDouble)})"
+    logDebug "Final lux calculation: ${luxDouble} lux (rounded to ${Math.round(luxDouble)})"
     
     // Round to nearest integer for lux value
     return Math.round(luxDouble)
+}
+
+///
+/// Helper Methods
+///
+
+def logDebug(msg) {
+    if (settings?.enableDebug) {
+        log.debug msg
+    }
+}
+
+def logInfo(msg) {
+    log.info msg
 }
 
 // Additional helper method to ensure numeric type consistency
