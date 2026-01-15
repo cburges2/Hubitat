@@ -52,16 +52,6 @@ def mainPage() {
               submitOnChange: true             
             )
 
-            if (virtualSwitch1) {
-                input (
-                    name: "trackVirtualSwitch1", 
-                    type: "bool", 
-                    title: "Track Virtual Switch 1 Changes", 
-                    required: true, 
-                    defaultValue: "true"
-                )
-            } 
-
             section("<b>Routine ID for Switch 1 On</b>") {
                 input (
                 name: "onRoutine1", 
@@ -89,7 +79,7 @@ def mainPage() {
             }    
         }
 
-        section("<b>Add More Devices</b>") {
+        section("<b>Add Another Switch</b>") {
             state.more1 = false
             input (
               name: "selectController2", 
@@ -116,14 +106,6 @@ def mainPage() {
                     )
 
                     if (virtualSwitch2) {
-                        input (
-                            name: "trackVirtualSwitch2", 
-                            type: "bool", 
-                            title: "Track Virtual Switch 2 Changes", 
-                            required: true, 
-                            defaultValue: "false"
-                        )
-
                         section("<b>Routine ID for Switch 2 On</b>") {
                             input (
                             name: "onRoutine2", 
@@ -174,6 +156,7 @@ def installed() {
 }
 
 def updated() {
+    unsubscribe()
     initialize()
 }
 
