@@ -23,6 +23,7 @@
  *  V1.2.0 - Deepseek Added Lux calculation and attribute
  *  V1.2.1 - Fixed solar spectrum preference application in all conversion methods
  *  V1.2.2 - Added debug logging preference and illuminance offset preference
+ *  V1.2.3 - Changed illuminance offset to percentage-based offset with type fixes
  */
 
 metadata {
@@ -52,7 +53,7 @@ metadata {
         section("Lux Conversion Settings") {
             input "solarSpectrum", "enum", title: "Solar Spectrum Type:", description: "Affects W/m² to lux conversion", required: true, defaultValue: "Direct Sunlight", options: ["Direct Sunlight", "Overcast Sky", "Clear Sky", "CIE Standard Illuminant D65"]
             input "conversionMethod", "enum", title: "Conversion Method:", description: "Method for W/m² to lux conversion", required: true, defaultValue: "Average Efficacy", options: ["Average Efficacy", "Solar Constant Based", "Photopic Luminous Efficacy"]
-            input "illuminanceOffset", "number", title: "Illuminance Offset (lux)", description: "Adjust final lux value (positive or negative)", required: false, defaultValue: 0
+            input "illuminanceOffsetPercent", "number", title: "Illuminance Offset (%)", description: "Percentage adjustment: +10% = +10% higher, -5% = 5% lower", required: false, defaultValue: 0, range: "-50..50"
             input name: "luxInfo", type: "text", title: "Note:", description: "Lux measures visible light intensity to human eye"
         }
         section("Debug Settings") {
@@ -65,7 +66,7 @@ metadata {
 def updated() {
     logDebug "updated()"
     logDebug "Debug logging enabled: ${settings?.enableDebug}"
-    logDebug "Illuminance offset: ${settings?.illuminanceOffset} lux"
+    logDebug "Illuminance offset percent: ${settings?.illuminanceOffsetPercent}%"
 
     unschedule()
     refresh()
@@ -85,10 +86,10 @@ def refresh()
     def irradiance = calculateSolarIrradiance(coords.altitude, coords.azimuth)
     def lux = calculateLux(irradiance, coords.altitude)
     
-    // Apply illuminance offset if configured
-    def finalLux = applyIlluminanceOffset(lux)
+    // Apply illuminance percentage offset if configured
+    def finalLux = applyIlluminancePercentageOffset(lux)
     
-    logDebug "Raw calculated lux: ${lux}, After offset: ${finalLux}"
+    logDebug "Raw calculated lux: ${lux}, After ${settings?.illuminanceOffsetPercent ?: 0}% offset: ${finalLux}"
 
     sendEvent(name: "altitude", value: coords.altitude)
     sendEvent(name: "azimuth", value: coords.azimuth)
@@ -99,18 +100,41 @@ def refresh()
     logDebug "SunCalc: Altitude: ${coords.altitude}°, Azimuth: ${coords.azimuth}°, Irradiance: ${irradiance} W/m², Illuminance: ${finalLux} lux"
 }
 
-def applyIlluminanceOffset(luxValue) {
-    def offset = settings?.illuminanceOffset ?: 0
-    if (offset instanceof String && offset.isNumber()) {
-        offset = offset.toDouble()
-    } else if (offset instanceof Integer || offset instanceof BigDecimal) {
-        offset = offset.toDouble()
+def applyIlluminancePercentageOffset(luxValue) {
+    def offsetPercent = settings?.illuminanceOffsetPercent ?: 0
+    
+    // Convert luxValue to Double for consistent type handling
+    def luxDouble = luxValue.toDouble()
+    
+    if (offsetPercent != 0) {
+        // Convert offsetPercent to Double
+        def offsetPercentDouble
+        if (offsetPercent instanceof String && offsetPercent.isNumber()) {
+            offsetPercentDouble = offsetPercent.toDouble()
+        } else if (offsetPercent instanceof Integer || offsetPercent instanceof BigDecimal || offsetPercent instanceof Float) {
+            offsetPercentDouble = offsetPercent.toDouble()
+        } else {
+            offsetPercentDouble = offsetPercent
+        }
+        
+        // Calculate multiplier: +10% = 1.10, -5% = 0.95
+        def offsetMultiplier = 1.0 + (offsetPercentDouble / 100.0)
+        def offsetLux = luxDouble * offsetMultiplier
+        
+        logDebug "Applying ${offsetPercentDouble}% offset: ${luxDouble} × ${offsetMultiplier} = ${offsetLux}"
+        
+        // Ensure lux doesn't go below 0 - using type-safe max calculation
+        def minValue = 0.0
+        def offsetLuxDouble = offsetLux.toDouble()
+        
+        // Use type-safe comparison to avoid Math.max ambiguity
+        def result = offsetLuxDouble > minValue ? offsetLuxDouble : minValue
+        
+        return Math.round(result).toInteger()
     }
     
-    def offsetLux = luxValue + offset
-    
-    // Ensure lux doesn't go below 0
-    return Math.max(0, offsetLux)
+    // If no offset, return the original value as Integer
+    return Math.round(luxDouble).toInteger()
 }
 
 ///
@@ -241,7 +265,7 @@ def calculateDirectRadiation(altitude, pressure, turbidity) {
 
     logDebug "Direct radiation: dayOfYear=${dayOfYear}, eccentricity=${eccentricity}, airMass=${airMass}, transmittance=${transmittance}, directIrradiance=${directIrradiance}"
 
-    return Math.max(0, directIrradiance)
+    return typeSafeMax(0, directIrradiance)
 }
 
 def calculateAirMass(altitude, pressure) {
@@ -273,7 +297,7 @@ def calculateDiffuseRadiation(altitude, turbidity) {
 
     logDebug "Diffuse radiation: altitudeRad=${altitudeRad}, diffuseFraction=${diffuseFraction}, baseIrradiance=${baseIrradiance}, diffuseIrradiance=${diffuseIrradiance}"
 
-    return Math.max(0, diffuseIrradiance)
+    return typeSafeMax(0, diffuseIrradiance)
 }
 
 def calculateSurfaceIrradiance(directIrradiance, diffuseIrradiance, altitude, azimuth, incidenceAngleDeg) {
@@ -305,7 +329,7 @@ def calculateSurfaceIrradiance(directIrradiance, diffuseIrradiance, altitude, az
                        Math.cos(declination) * Math.sin(latRad) * Math.sin(incidenceAngleRad) * Math.cos(surfaceAzimuthRad) * Math.cos(zenithAngle) +
                        Math.cos(declination) * Math.sin(incidenceAngleRad) * Math.sin(surfaceAzimuthRad) * Math.sin(zenithAngle)
 
-    cosIncidence = Math.max(0, Math.min(1, cosIncidence))
+    cosIncidence = typeSafeMax(0, typeSafeMin(1, cosIncidence))
 
     // Direct radiation on tilted surface
     def directOnSurface = directIrradiance * cosIncidence / Math.sin(altitudeRad)
@@ -322,7 +346,7 @@ def calculateSurfaceIrradiance(directIrradiance, diffuseIrradiance, altitude, az
 
     logDebug "Surface irradiance: cosIncidence=${cosIncidence}, directOnSurface=${directOnSurface}, diffuseOnSurface=${diffuseOnSurface}, groundReflected=${groundReflected}, total=${totalIrradiance}"
 
-    return Math.max(0, totalIrradiance)
+    return typeSafeMax(0, totalIrradiance)
 }
 
 ///
@@ -403,11 +427,10 @@ def calculateLux(irradiance, altitude) {
     }
 
     // Type conversion to avoid Math.max ambiguity
-    def minValue = 0.0
     def luxDouble = luxValue.toDouble()
     
-    // Ensure reasonable values
-    luxDouble = Math.max(minValue, luxDouble)
+    // Ensure reasonable values using type-safe max
+    luxDouble = typeSafeMax(0.0, luxDouble)
     
     // Log final value for debugging
     logDebug "Final lux calculation: ${luxDouble} lux (rounded to ${Math.round(luxDouble)})"
@@ -428,6 +451,20 @@ def logDebug(msg) {
 
 def logInfo(msg) {
     log.info msg
+}
+
+// Type-safe max function to avoid Groovy ambiguity errors
+def typeSafeMax(a, b) {
+    def aDouble = a.toDouble()
+    def bDouble = b.toDouble()
+    return aDouble > bDouble ? aDouble : bDouble
+}
+
+// Type-safe min function to avoid Groovy ambiguity errors
+def typeSafeMin(a, b) {
+    def aDouble = a.toDouble()
+    def bDouble = b.toDouble()
+    return aDouble < bDouble ? aDouble : bDouble
 }
 
 // Additional helper method to ensure numeric type consistency
