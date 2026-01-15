@@ -1,23 +1,23 @@
 /**
  * SunCalc Driver for Hubitat
- *
+ 
  * A port of the SunCalc.js library https://github.com/mourner/suncalc
- *
+ 
  * Altitude is the angle up from the horizon. Zero degrees altitude means exactly on your local horizon, and 90 degrees is "straight up". Hence, "directly underfoot" is -90 degrees altitude. 
  * Azimuth is the angle along the horizon, with zero degrees corresponding to North, and increasing in a clockwise fashion. Thus, 90 degrees is East, 180 degrees is South, and 270 degrees is West. 
  * Using these two angles, one can describe the apparent position of an object (such as the Sun at a given time).
- *
+
  * Solar Irradiance Calculation Added: Calculates solar power per square meter based on sun position and incidence angle
  * Lux Calculation Added: Converts solar irradiance to illuminance (lux)
- *
+
  * Copyright (c) 2019 Justin Walker
- *
+
  * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
- *
+
  * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
- *
+
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
+
  *  V1.0.0 - Initial version
  *  V1.1.0 - Deepseek Added solar irradiance calculation and incidence angle preference
  *  V1.2.0 - Deepseek Added Lux calculation and attribute
@@ -75,13 +75,13 @@ def refresh()
     def coords = getPosition()
     def irradiance = calculateSolarIrradiance(coords.altitude, coords.azimuth)
     def lux = calculateLux(irradiance, coords.altitude)
-    
+
     sendEvent(name: "altitude", value: coords.altitude)
     sendEvent(name: "azimuth", value: coords.azimuth)
     sendEvent(name: "solarIrradiance", value: irradiance, unit: "W/m²")
     sendEvent(name: "illuminance", value: lux, unit: "lux")
     sendEvent(name: "lastCalculated", value: new Date().format("yyyy-MM-dd h:mm", location.timeZone))
-    
+
     log.debug "SunCalc: Altitude: ${coords.altitude}°, Azimuth: ${coords.azimuth}°, Irradiance: ${irradiance} W/m², Illuminance: ${lux} lux"
 }
 
@@ -168,43 +168,44 @@ def calculateSolarIrradiance(altitude, azimuth) {
     if (altitude <= 0) {
         return 0.0
     }
-    
+
     // Get user preferences with defaults
     def incidenceAngleDeg = settings?.incidenceAngle ?: 0
-    def pressure = settings?.atmosphericPressure ?: 1013.25
+    // Ensure numeric type for pressure calculation
+    def pressure = (settings?.atmosphericPressure ?: 1013.25).toBigDecimal()
     def turbidity = settings?.turbidity ?: 3.0
-    
+
     // Calculate solar irradiance
     def irradiance = calculateDirectRadiation(altitude, pressure, turbidity)
     def diffuseIrradiance = calculateDiffuseRadiation(altitude, turbidity)
-    
+
     // Calculate total irradiance on a surface with given incidence angle
     def totalIrradiance = calculateSurfaceIrradiance(irradiance, diffuseIrradiance, altitude, azimuth, incidenceAngleDeg)
-    
+
     return Math.round(totalIrradiance * 10) / 10.0 // Round to 1 decimal place
 }
 
 def calculateDirectRadiation(altitude, pressure, turbidity) {
     // Convert altitude to radians
     def altitudeRad = altitude * Math.PI / 180
-    
+
     // Solar constant (W/m²)
     def solarConstant = 1367.0
-    
+
     // Air mass (relative optical path length)
     def airMass = calculateAirMass(altitude, pressure)
-    
+
     // Extraterrestrial radiation
     def dayOfYear = new Date().format("D").toInteger()
     def eccentricity = 1 + 0.033 * Math.cos(2 * Math.PI * (dayOfYear - 3) / 365.25)
     def extraterrestrial = solarConstant * eccentricity
-    
+
     // Atmospheric transmittance (simplified Hottel model)
     def transmittance = Math.exp(-turbidity * airMass * 0.2)
-    
+
     // Direct normal irradiance
     def directIrradiance = extraterrestrial * transmittance * Math.sin(altitudeRad)
-    
+
     return Math.max(0, directIrradiance)
 }
 
@@ -212,26 +213,26 @@ def calculateAirMass(altitude, pressure) {
     // Calculate relative air mass using Kasten-Young formula
     def altitudeRad = altitude * Math.PI / 180
     def airMass = 1.0 / (Math.sin(altitudeRad) + 0.50572 * Math.pow((6.07995 + altitude), -1.6364))
-    
+
     // Adjust for atmospheric pressure
-    def pressureRatio = pressure / 1013.25
+    def pressureRatio = (pressure.toBigDecimal() / 1013.25.toBigDecimal())
     return airMass * pressureRatio
 }
 
 def calculateDiffuseRadiation(altitude, turbidity) {
     // Simple model for diffuse radiation (circumsolar + isotropic)
     def altitudeRad = altitude * Math.PI / 180
-    
+
     // Diffuse radiation fraction increases with turbidity and lower altitude
     def diffuseFraction = 0.1 + (turbidity - 2.0) * 0.05 + (1 - Math.sin(altitudeRad)) * 0.3
-    
+
     // Base diffuse radiation
     def dayOfYear = new Date().format("D").toInteger()
     def eccentricity = 1 + 0.033 * Math.cos(2 * Math.PI * (dayOfYear - 3) / 365.25)
     def baseIrradiance = 1367.0 * eccentricity * Math.sin(altitudeRad)
-    
+
     def diffuseIrradiance = baseIrradiance * diffuseFraction
-    
+
     return Math.max(0, diffuseIrradiance)
 }
 
@@ -240,45 +241,45 @@ def calculateSurfaceIrradiance(directIrradiance, diffuseIrradiance, altitude, az
     def altitudeRad = altitude * Math.PI / 180
     def azimuthRad = azimuth * Math.PI / 180
     def incidenceAngleRad = incidenceAngleDeg * Math.PI / 180
-    
+
     // Get location latitude
     def lat = location.latitude
     def latRad = lat * Math.PI / 180
-    
+
     // Calculate sun's declination and hour angle (simplified)
     def dayOfYear = new Date().format("D").toInteger()
     def declination = 23.45 * Math.sin(2 * Math.PI * (284 + dayOfYear) / 365) * Math.PI / 180
-    
+
     // Calculate solar zenith angle
     def zenithAngle = Math.PI/2 - altitudeRad
-    
+
     // Calculate angle of incidence on tilted surface
     // Using simplified formula for surface facing equator (azimuth = 180° South)
     def surfaceAzimuth = 180.0 // Assuming surface faces South (common for solar panels)
     def surfaceAzimuthRad = surfaceAzimuth * Math.PI / 180
-    
+
     // Calculate incidence angle using trigonometric formula
     def cosIncidence = Math.sin(declination) * Math.sin(latRad) * Math.cos(incidenceAngleRad) -
                        Math.sin(declination) * Math.cos(latRad) * Math.sin(incidenceAngleRad) * Math.cos(surfaceAzimuthRad) +
                        Math.cos(declination) * Math.cos(latRad) * Math.cos(incidenceAngleRad) * Math.cos(zenithAngle) +
                        Math.cos(declination) * Math.sin(latRad) * Math.sin(incidenceAngleRad) * Math.cos(surfaceAzimuthRad) * Math.cos(zenithAngle) +
                        Math.cos(declination) * Math.sin(incidenceAngleRad) * Math.sin(surfaceAzimuthRad) * Math.sin(zenithAngle)
-    
+
     cosIncidence = Math.max(0, Math.min(1, cosIncidence))
-    
+
     // Direct radiation on tilted surface
     def directOnSurface = directIrradiance * cosIncidence / Math.sin(altitudeRad)
-    
+
     // Diffuse radiation on tilted surface (simplified isotropic model)
     def diffuseOnSurface = diffuseIrradiance * (1 + Math.cos(incidenceAngleRad)) / 2
-    
+
     // Ground reflected radiation (albedo = 0.2 typical)
     def albedo = 0.2
     def groundReflected = (directIrradiance + diffuseIrradiance) * albedo * (1 - Math.cos(incidenceAngleRad)) / 2
-    
+
     // Total irradiance on surface
     def totalIrradiance = directOnSurface + diffuseOnSurface + groundReflected
-    
+
     return Math.max(0, totalIrradiance)
 }
 
@@ -291,126 +292,82 @@ def calculateLux(irradiance, altitude) {
     if (irradiance <= 0 || altitude <= 0) {
         return 0
     }
-    
+
     // Get user preferences
     def spectrumType = settings?.solarSpectrum ?: "Direct Sunlight"
     def conversionType = settings?.conversionMethod ?: "Average Efficacy"
-    
-    // Calculate lux based on selected method
-    def lux = 0
+
+    // Conversion factors based on solar spectrum type (lumens per watt)
+    def efficacy = 120.0 // Default average efficacy
+
+    switch(spectrumType) {
+        case "Direct Sunlight":
+            efficacy = 120.0
+            break
+        case "Overcast Sky":
+            efficacy = 140.0
+            break
+        case "Clear Sky":
+            efficacy = 125.0
+            break
+        case "CIE Standard Illuminant D65":
+            efficacy = 130.0
+            break
+    }
+
+    // Apply conversion method
+    def luxValue = 0.0
     
     switch(conversionType) {
         case "Average Efficacy":
-            lux = calculateLuxByAverageEfficacy(irradiance, spectrumType)
+            // Simple multiplication by luminous efficacy
+            luxValue = irradiance * efficacy
             break
             
         case "Solar Constant Based":
-            lux = calculateLuxBySolarConstant(irradiance, altitude, spectrumType)
+            // Based on solar constant and altitude
+            def solarConstant = 1367.0
+            def dayOfYear = new Date().format("D").toInteger()
+            def eccentricity = 1 + 0.033 * Math.cos(2 * Math.PI * (dayOfYear - 3) / 365.25)
+            def altitudeRad = altitude * Math.PI / 180
+            
+            // Maximum possible lux at this altitude
+            def maxLux = solarConstant * eccentricity * Math.sin(altitudeRad) * 120.0
+            
+            // Scale by actual irradiance ratio
+            luxValue = (irradiance / (solarConstant * eccentricity * Math.sin(altitudeRad))) * maxLux
             break
             
         case "Photopic Luminous Efficacy":
-            lux = calculateLuxByPhotopicEfficacy(irradiance, altitude, spectrumType)
-            break
-            
-        default:
-            lux = calculateLuxByAverageEfficacy(irradiance, spectrumType)
+            // More complex calculation considering photopic vision
+            // Using simplified formula that varies with altitude
+            def altitudeFactor = 0.8 + (altitude / 90.0) * 0.4
+            luxValue = irradiance * efficacy * altitudeFactor
             break
     }
+
+    // FIX FOR LINE 351: Convert both values to the same type before Math.max()
+    def minValue = 0.0  // Use double instead of integer
+    def luxDouble = luxValue.toDouble()  // Ensure luxValue is a double
     
-    // Round to nearest whole lux (illuminance is typically reported without decimals)
-    return Math.round(lux)
+    // Ensure reasonable values
+    luxDouble = Math.max(minValue, luxDouble)
+    
+    // Round to nearest integer for lux value
+    return Math.round(luxDouble)
 }
 
-def calculateLuxByAverageEfficacy(irradiance, spectrumType) {
-    // Average luminous efficacy values (lm/W) for different solar conditions
-    def efficacyValues = [
-        "Direct Sunlight": 93,      // Bright sunlight at noon
-        "Clear Sky": 105,           // Clear sky, sun not direct
-        "Overcast Sky": 120,        // Overcast daylight
-        "CIE Standard Illuminant D65": 100  // Standard daylight illuminant
-    ]
-    
-    def efficacy = efficacyValues[spectrumType] ?: 100
-    return irradiance * efficacy
-}
-
-def calculateLuxBySolarConstant(irradiance, altitude, spectrumType) {
-    // More sophisticated calculation based on solar constant and altitude
-    def solarConstant = 1367.0  // W/m²
-    
-    // Calculate solar altitude factor
-    def altitudeRad = altitude * Math.PI / 180
-    
-    // Atmospheric attenuation factor (simplified)
-    def airMass = calculateAirMass(altitude, 1013.25)
-    def atmosphericFactor = Math.exp(-0.2 * airMass)
-    
-    // Spectrum adjustment factors
-    def spectrumFactors = [
-        "Direct Sunlight": 0.95,
-        "Clear Sky": 1.0,
-        "Overcast Sky": 1.1,
-        "CIE Standard Illuminant D65": 1.0
-    ]
-    
-    def spectrumFactor = spectrumFactors[spectrumType] ?: 1.0
-    
-    // Base luminous efficacy at sea level with clear sky
-    def baseEfficacy = 105.0  // lm/W
-    
-    // Adjust efficacy for atmospheric conditions and spectrum
-    def adjustedEfficacy = baseEfficacy * atmosphericFactor * spectrumFactor
-    
-    // Calculate maximum possible solar irradiance for this altitude
-    def dayOfYear = new Date().format("D").toInteger()
-    def eccentricity = 1 + 0.033 * Math.cos(2 * Math.PI * (dayOfYear - 3) / 365.25)
-    def maxSolarIrradiance = solarConstant * eccentricity * Math.sin(altitudeRad) * atmosphericFactor
-    
-    // Normalize current irradiance relative to maximum
-    def normalizedIrradiance = maxSolarIrradiance > 0 ? Math.min(1.0, irradiance / maxSolarIrradiance) : 0
-    
-    // Calculate lux
-    def lux = normalizedIrradiance * maxSolarIrradiance * adjustedEfficacy
-    
-    return lux
-}
-
-def calculateLuxByPhotopicEfficacy(irradiance, altitude, spectrumType) {
-    // Photopic luminous efficacy calculation considering human eye sensitivity
-    def altitudeRad = altitude * Math.PI / 180
-    
-    // Photopic luminous efficacy curve approximation
-    // Standard value is 683 lm/W at 555nm (peak sensitivity)
-    // Sunlight has a spectral power distribution that reduces effective efficacy
-    
-    // Air mass affects spectral distribution
-    def airMass = calculateAirMass(altitude, 1013.25)
-    
-    // Spectral adjustment based on air mass (more atmosphere = redder light)
-    // Human eye is less sensitive to red light, so efficacy decreases with higher air mass
-    def spectralAdjustment = 1.0 - (0.05 * (airMass - 1))
-    spectralAdjustment = Math.max(0.7, Math.min(1.0, spectralAdjustment))
-    
-    // Spectrum-specific adjustments
-    def spectrumMultipliers = [
-        "Direct Sunlight": 0.98,    // Direct sun has full spectrum
-        "Clear Sky": 1.02,          // Clear sky scatters blue, increasing perceived brightness
-        "Overcast Sky": 1.08,       // Overcast scatters more blue light
-        "CIE Standard Illuminant D65": 1.00  // Standard daylight
-    ]
-    
-    def spectrumMultiplier = spectrumMultipliers[spectrumType] ?: 1.0
-    
-    // Base photopic efficacy for sunlight
-    def basePhotopicEfficacy = 93.0  // lm/W for direct sunlight
-    
-    // Adjust for atmospheric conditions and spectrum
-    def adjustedEfficacy = basePhotopicEfficacy * spectralAdjustment * spectrumMultiplier
-    
-    // Altitude effect (higher altitude = less atmosphere = bluer light = higher efficacy)
-    def altitudeEffect = 1.0 + (0.0005 * altitude)  // Small positive effect with altitude
-    
-    def finalEfficacy = adjustedEfficacy * altitudeEffect
-    
-    return irradiance * finalEfficacy
+// Additional helper method to ensure numeric type consistency
+def ensureDouble(value) {
+    if (value instanceof BigDecimal) {
+        return value.toDouble()
+    } else if (value instanceof Integer) {
+        return value.toDouble()
+    } else if (value instanceof Float) {
+        return value.toDouble()
+    } else if (value instanceof String && value.isNumber()) {
+        return value.toDouble()
+    } else {
+        return value
+    }
 }
