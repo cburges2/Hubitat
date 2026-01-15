@@ -21,6 +21,7 @@
  *  V1.0.0 - Initial version
  *  V1.1.0 - Deepseek Added solar irradiance calculation and incidence angle preference
  *  V1.2.0 - Deepseek Added Lux calculation and attribute
+ *  V1.2.1 - Fixed solar spectrum preference application in all conversion methods
  */
 
 metadata {
@@ -284,7 +285,7 @@ def calculateSurfaceIrradiance(directIrradiance, diffuseIrradiance, altitude, az
 }
 
 ///
-/// Lux (Illuminance) Calculations
+/// Lux (Illuminance) Calculations - FIXED TO APPLY SOLAR SPECTRUM PREFERENCE
 ///
 
 def calculateLux(irradiance, altitude) {
@@ -303,25 +304,30 @@ def calculateLux(irradiance, altitude) {
     switch(spectrumType) {
         case "Direct Sunlight":
             efficacy = 120.0
+            log.debug "Using Direct Sunlight efficacy: 120 lm/W"
             break
         case "Overcast Sky":
             efficacy = 140.0
+            log.debug "Using Overcast Sky efficacy: 140 lm/W"
             break
         case "Clear Sky":
             efficacy = 125.0
+            log.debug "Using Clear Sky efficacy: 125 lm/W"
             break
         case "CIE Standard Illuminant D65":
             efficacy = 130.0
+            log.debug "Using CIE Standard Illuminant D65 efficacy: 130 lm/W"
             break
     }
 
-    // Apply conversion method
+    // Apply conversion method - ALL METHODS NOW USE THE EFFICACY VALUE
     def luxValue = 0.0
     
     switch(conversionType) {
         case "Average Efficacy":
             // Simple multiplication by luminous efficacy
             luxValue = irradiance * efficacy
+            log.debug "Average Efficacy: ${irradiance} W/m² × ${efficacy} lm/W = ${luxValue} lux"
             break
             
         case "Solar Constant Based":
@@ -331,11 +337,15 @@ def calculateLux(irradiance, altitude) {
             def eccentricity = 1 + 0.033 * Math.cos(2 * Math.PI * (dayOfYear - 3) / 365.25)
             def altitudeRad = altitude * Math.PI / 180
             
-            // Maximum possible lux at this altitude
-            def maxLux = solarConstant * eccentricity * Math.sin(altitudeRad) * 120.0
+            // Maximum possible lux at this altitude - USING EFFICACY VARIABLE
+            def maxLux = solarConstant * eccentricity * Math.sin(altitudeRad) * efficacy
             
             // Scale by actual irradiance ratio
             luxValue = (irradiance / (solarConstant * eccentricity * Math.sin(altitudeRad))) * maxLux
+            
+            log.debug "Solar Constant Based: irradianceRatio = ${irradiance} / ${solarConstant * eccentricity * Math.sin(altitudeRad)} = ${irradiance / (solarConstant * eccentricity * Math.sin(altitudeRad))}"
+            log.debug "Solar Constant Based: maxLux = ${solarConstant * eccentricity * Math.sin(altitudeRad)} × ${efficacy} = ${maxLux}"
+            log.debug "Solar Constant Based: ${irradiance / (solarConstant * eccentricity * Math.sin(altitudeRad))} × ${maxLux} = ${luxValue} lux"
             break
             
         case "Photopic Luminous Efficacy":
@@ -343,15 +353,21 @@ def calculateLux(irradiance, altitude) {
             // Using simplified formula that varies with altitude
             def altitudeFactor = 0.8 + (altitude / 90.0) * 0.4
             luxValue = irradiance * efficacy * altitudeFactor
+            
+            log.debug "Photopic Luminous Efficacy: altitudeFactor = 0.8 + (${altitude}/90)×0.4 = ${altitudeFactor}"
+            log.debug "Photopic Luminous Efficacy: ${irradiance} × ${efficacy} × ${altitudeFactor} = ${luxValue} lux"
             break
     }
 
-    // FIX FOR LINE 351: Convert both values to the same type before Math.max()
-    def minValue = 0.0  // Use double instead of integer
-    def luxDouble = luxValue.toDouble()  // Ensure luxValue is a double
+    // Type conversion to avoid Math.max ambiguity
+    def minValue = 0.0
+    def luxDouble = luxValue.toDouble()
     
     // Ensure reasonable values
     luxDouble = Math.max(minValue, luxDouble)
+    
+    // Log final value for debugging
+    log.debug "Final lux calculation: ${luxDouble} lux (rounded to ${Math.round(luxDouble)})"
     
     // Round to nearest integer for lux value
     return Math.round(luxDouble)
