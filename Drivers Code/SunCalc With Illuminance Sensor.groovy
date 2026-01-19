@@ -23,14 +23,13 @@
  *  V1.3.0 - Added days only scheduling to only auto Update between sunrise and sunset
  *  V1.4.0 - Added Period of the day attribute and get method
  *  V1.5.0 - Added sensorIlluminance to be set from external source, and calulate sensorPeriod when set. 
- *           Added preference to refresh calcs when sensorIlluminance is updated.  
+             Added preference to refresh calcs when sensorIlluminance is updated.  
  */
 
 import java.util.Calendar
-import java.util.Date;
 
 metadata {
-    definition (name: "SunCalc With Illuminance Sensor", namespace: "augoisms", author: "Justin Walker") {
+    definition (name: "SunCalc Illuminance Data", namespace: "augoisms", author: "Justin Walker") {
         capability "Actuator"
         capability "Sensor"
         capability "IlluminanceMeasurement"
@@ -45,10 +44,6 @@ metadata {
         attribute "calcStop", "string"
         attribute "lastCalculated", "string"
         attribute "sensorIlluminance", "number"
-        attribute "skyCondition", "string"
-        attribute "illuminanceVariance", "number"
-        attribute "illuminanceStdDev", "number"
-        attribute "avgPercentageDiff", "number"       
 
         command "setDayOnlyRefresh"
         command "setSensorIlluminance",[[name:"Sensor Illuminance",type: "NUMBER", description: "Set External Sensor Illuminance Value"]]
@@ -66,22 +61,11 @@ metadata {
             input "calibrationOffset", "number", title: "Lux Calibration Offset", description: "Offset to illuminance based on raw lux (e.g., +/-100 = +/-100Lux, 0 = no correction)", required: true, defaultValue: 0.0
             input "twilightLimit", "number", title: "Twilight Limit (degrees)", description: "Sun altitude at which illuminance becomes zero. Must be negative (e.g., -6 for civil twilight, -12 for nautical, -18 for astronomical).", required: true, defaultValue: -6, range: "-18..0"        
         }
-        section("Sky Conditions Settings") {
-            input name: "varianceWindow", type: "number", title: "Variance Calculation Window (minutes)", defaultValue: 30, description: "Time window for calculating illuminance variance"
-            input name: "varianceThresholdLow", type: "number", title: "Low Variance Threshold (%)", defaultValue: 15, description: "Threshold for clear sky (percentage difference)"
-            input name: "varianceThresholdHigh", type: "number", title: "High Variance Threshold (%)", defaultValue: 50, description: "Threshold for cloudy/overcast (percentage difference)"
-            input name: "varianceSamples", type: "number", title: "Minimum Samples for Calculation", defaultValue: 5, description: "Minimum data points needed for variance calculation"
-        }
     }
 }
 
-def installed() {
-    setStates()
-}
 def updated() {
     log.debug "updated()"
-
-   if (!state.illuminanceHistory) {setStates()}
 
     unschedule()
     refresh()
@@ -102,12 +86,6 @@ def updated() {
         def updateIntervalCmd = (settings?.updateInterval ?: "1 Minutes").replace(" ", "")
         "runEvery${updateIntervalCmd}"(refresh)
     } else (unschedule("refresh"))
-}
-
-def setStates() {
-    state.illuminanceHistory = []
-    state.varianceHistory = []
-    state.skyCondition = "unknown"     
 }
 
 def parse(String description) {
@@ -331,161 +309,12 @@ def calculateIlluminance(irradiance) {
 
 
 /**
-* Set Sensor Illuminance from an external sensor
-
+* Set Sensor Illuminance from an external source
+*/
 def setSensorIlluminance(lux) {
 	sendEvent(name: "sensorIlluminance", value: lux)
-}*/
-
-void setSensorIlluminance(value) {
-
-    def lux = BigDecimal.valueOf(value)
-    def currentTime = new Date()
-    def expectedLux = device.currentValue("illuminance") ?: 0
-    
-    // Calculate percentage difference
-    def percentageDiff = 0
-    if (expectedLux > 0) {
-        percentageDiff = ((expectedLux - lux) / expectedLux) * 100
-    }
-    
-    // Store illuminance difference with timestamp
-    def diffData = [
-        timestamp: currentTime,
-        expected: expectedLux,
-        actual: lux,
-        difference: expectedLux - lux,
-        percentageDiff: percentageDiff
-    ]
-    
-    // Add to history
-    state.illuminanceHistory = state.illuminanceHistory ?: []
-    state.illuminanceHistory << diffData
-    
-    // Remove old entries outside the time window
-    def windowMillis = (varianceWindow ?: 30) * 60 * 1000
-    state.illuminanceHistory = state.illuminanceHistory.findAll { 
-        (currentTime - it.timestamp) <= windowMillis 
-    }
-    
-    // Calculate variance if we have enough samples
-    def skyCondition = "unknown"
-    if (state.illuminanceHistory.size() >= (varianceSamples ?: 5)) {
-        def differences = state.illuminanceHistory.collect { it.difference }
-        def percentageDiffs = state.illuminanceHistory.collect { it.percentageDiff }
-        
-        // Calculate mean
-        def sum = differences.sum()
-        def mean = sum / differences.size()
-        
-        // Calculate variance
-        def varianceSum = 0
-        differences.each { diff ->
-            varianceSum += (diff - mean) * (diff - mean)
-        }
-        def variance = varianceSum / differences.size()
-        
-        // Calculate standard deviation
-        def stdDev = Math.sqrt(variance)
-        
-        // Calculate average absolute percentage difference
-        def avgAbsPercentageDiff = percentageDiffs.collect { Math.abs(it) }.sum() / percentageDiffs.size()
-        
-        // Store variance data
-        state.varianceHistory = state.varianceHistory ?: []
-        state.varianceHistory << [
-            timestamp: currentTime,
-            variance: variance,
-            stdDev: stdDev,
-            avgPercentageDiff: avgAbsPercentageDiff
-        ]
-        
-        // Keep variance history manageable
-        if (state.varianceHistory.size() > 10) {
-            state.varianceHistory = state.varianceHistory[-10..-1]
-        }
-        
-        // Determine sky condition based on thresholds
-        def lowThreshold = varianceThresholdLow ?: 15
-        def highThreshold = varianceThresholdHigh ?: 50
-        
-        if (avgAbsPercentageDiff <= lowThreshold) {
-            skyCondition = "clear"
-        } else if (avgAbsPercentageDiff <= highThreshold) {
-            skyCondition = "partly cloudy"
-        } else {
-            skyCondition = "cloudy/overcast"
-        }
-        
-        // Additional logic based on variance patterns
-        if (variance > 10000 && stdDev > 100) { // Large fluctuations
-            skyCondition = "partly cloudy with passing clouds"
-        }
-        
-        if (lux < 100 && expectedLux > 1000) { // Very dark during daytime
-            skyCondition = "heavy overcast/stormy"
-        }
-        
-        // Update state
-        state.skyCondition = skyCondition
-        
-        // Send events
-        sendEvent(name: "skyCondition", value: skyCondition, descriptionText: "Sky condition updated: ${skyCondition}")
-        sendEvent(name: "illuminanceVariance", value: variance.round(2), unit: "lux²", descriptionText: "Illuminance variance: ${variance.round(2)} lux²")
-        sendEvent(name: "illuminanceStdDev", value: stdDev.round(2), unit: "lux", descriptionText: "Standard deviation: ${stdDev.round(2)} lux")
-        sendEvent(name: "avgPercentageDiff", value: avgAbsPercentageDiff.round(1), unit: "%", descriptionText: "Average difference: ${avgAbsPercentageDiff.round(1)}%")
-    }
-    
-    // Original code for illuminance sensor
-    sendEvent(name: "sensorIlluminance", value: value, unit: "lux", descriptionText: "Sensor illuminance is ${lux} lux")
-    
-    // Log for debugging
-    //logDebug("Expected: ${expectedLux} lux, Actual: ${lux} lux, Diff: ${(expectedLux - lux).round(1)} lux, Sky: ${skyCondition}")
-    
-    // Update switch states based on conditions (existing logic)
-    //updateSwitchStates()
 }
 
-// Helper Methods
-void clearIlluminanceHistory() {
-    state.illuminanceHistory = []
-    state.varianceHistory = []
-    logInfo("Illuminance history cleared")
-}
 
-Map getSkyConditionStats() {
-    def stats = [
-        skyCondition: state.skyCondition ?: "unknown",
-        historySize: state.illuminanceHistory?.size() ?: 0,
-        varianceSamples: state.varianceHistory?.size() ?: 0
-    ]
-    
-    if (state.varianceHistory && state.varianceHistory.size() > 0) {
-        def latest = state.varianceHistory[-1]
-        stats.putAll([
-            currentVariance: latest.variance,
-            currentStdDev: latest.stdDev,
-            currentAvgPercentageDiff: latest.avgPercentageDiff
-        ])
-    }
-    
-    return stats
-}
 
-String getSkyConditionTrend() {
-    if (!state.varianceHistory || state.varianceHistory.size() < 2) {
-        return "insufficient data"
-    }
-    
-    def recent = state.varianceHistory[-1].avgPercentageDiff
-    def previous = state.varianceHistory[-2].avgPercentageDiff
-    
-    if (recent > previous * 1.1) {
-        return "worsening"
-    } else if (recent < previous * 0.9) {
-        return "improving"
-    } else {
-        return "stable"
-    }
-}
 
