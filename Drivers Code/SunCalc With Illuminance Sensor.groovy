@@ -29,7 +29,7 @@
 import java.util.Calendar
 
 metadata {
-    definition (name: "SunCalc Illuminance Data", namespace: "augoisms", author: "Justin Walker") {
+    definition (name: "SunCalc With Illuminance Sensor", namespace: "augoisms", author: "Justin Walker") {
         capability "Actuator"
         capability "Sensor"
         capability "IlluminanceMeasurement"
@@ -147,12 +147,12 @@ def applyCalibrations(luxValue) {
     } else if (factor instanceof Integer || factor instanceof BigDecimal) {
         factor = factor.toDouble()
     }
-
     def calibratedValue = luxValue * factor
-    if (factor < 0) {calibratedValue = luxValue - (Math.abs(calibratedValue) - luxValue)} // negative calibration
+    // Apply Difference Offset
+    calibratedValue = calibratedValue + offset    
 
-    // Apply Difference
-    calibratedValue = calibratedValue + offset
+    
+    if (factor < 0) {calibratedValue = luxValue - (Math.abs(calibratedValue) - luxValue)} // negative calibration
 
     // Ensure lux gets to 0 but not less
     if (altitude < -4.2 || calibratedValue < 0) {calibratedValue = 0}
@@ -288,7 +288,7 @@ private def standardIrradianceCalculation(altitude, azimuth) {
 
     // Atmospheric transmittance
     // Use a minimum altitude of 0.1 degrees for air mass calculation to avoid extreme values
-    def apparentAltitudeForAirMass = Math.max(altitude, 0.1)
+    def apparentAltitudeForAirMass = altitude  //Math.max(altitude, 0.1)
     def airMass = 1.0 / (Math.sin(Math.toRadians(apparentAltitudeForAirMass)) + 0.50572 * Math.pow(apparentAltitudeForAirMass + 6.07995, -1.6364))
     def transmittance = Math.exp(-0.2 * airMass)
 
@@ -313,6 +313,8 @@ def calculateIlluminance(irradiance) {
 */
 def setSensorIlluminance(lux) {
 	sendEvent(name: "sensorIlluminance", value: lux)
+
+    if (settings?.sensorUpdate) refresh()
 }
 
 
