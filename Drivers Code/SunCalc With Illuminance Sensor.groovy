@@ -21,9 +21,8 @@
  *  V1.1.0 - Added solar irradiance and illuminance calculations with incident angle preference
  *  V1.2.0 - Added preference for a calibration Factor to calibrate illuminance value to a sensor
  *  V1.3.0 - Added days only scheduling to only auto Update between sunrise and sunset
- *  V1.4.0 - Added Period of the day attribute and get method
- *  V1.5.0 - Added sensorIlluminance to be set from external source, and calulate sensorPeriod when set. 
-             Added preference to refresh calcs when sensorIlluminance is updated.  
+ *  V1.4.0 - Added sensorIlluminance to be set from external source, and preference to referush calcs when it is updated. 
+ *  
  */
 
 import java.util.Calendar
@@ -44,6 +43,7 @@ metadata {
         attribute "calcStop", "string"
         attribute "lastCalculated", "string"
         attribute "sensorIlluminance", "number"
+        attribute "calFactor", "number"
 
         command "setDayOnlyRefresh"
         command "setSensorIlluminance",[[name:"Sensor Illuminance",type: "NUMBER", description: "Set External Sensor Illuminance Value"]]
@@ -51,7 +51,8 @@ metadata {
     preferences() {
         section("Automatic Calculations"){
             input "autoUpdate", "bool", title: "Auto Update?", required: true, defaultValue: true
-            input "dayUpdateOnly", "bool", title:"Schedule turning Auto Update On 30 minutes before sunrise and Off 30 minutes after sunset", required: true, defaultValue: true
+            input "dayUpdateOnly", "bool", title:"Schedule turning Auto Update On set minutes before sunrise and Off set minutes after sunset", required: true, defaultValue: true
+            input "dayUpdateMinutesOffset", "number", title: "Number of minutes before and after sunrise to start/end calculations", description: "30 Minutes usually accounts for Twilight Calcs", required: true, defaultValue: 30, range: "0..60"
             input "updateInterval", "enum", title: "Update Interval:", required: true, defaultValue: "5 Minutes", options: ["1 Minute", "5 Minutes", "10 Minutes", "15 Minutes", "30 Minutes", "1 Hour", "3 Hours"]
             input "sensorUpdate", "bool", title: "Update when Sensor Illuminance Updates?", required: true, defaultValue: false       
         }
@@ -59,7 +60,7 @@ metadata {
             input "incidenceAngle", "number", title: "Surface Incidence Angle (degrees)", description: "0=horizontal, 90=vertical", required: true, defaultValue: 0, range: "0..90"
             input "calibrationFactor", "number", title: "Lux Calibration Factor", description: "Multiplier to illuminance based on raw lux (e.g., 1.1 = +10%, 1.0 = no correction)", required: true, defaultValue: 1.0
             input "calibrationOffset", "number", title: "Lux Calibration Offset", description: "Offset to illuminance based on raw lux (e.g., +/-100 = +/-100Lux, 0 = no correction)", required: true, defaultValue: 0.0
-            input "twilightLimit", "number", title: "Twilight Limit (degrees)", description: "Sun altitude at which illuminance becomes zero. Must be negative (e.g., -6 for civil twilight, -12 for nautical, -18 for astronomical).", required: true, defaultValue: -6, range: "-18..0"        
+            input "twilightLimit", "number", title: "Twilight Limit (degrees)", description: "Sun altitude at which illuminance becomes zero. Must be negative (e.g., -6 for civil twilight, -12 for nautical, -18 for astronomical).", required: true, defaultValue: -6, range: "-30..0"        
         }
     }
 }
@@ -86,38 +87,11 @@ def updated() {
         def updateIntervalCmd = (settings?.updateInterval ?: "1 Minutes").replace(" ", "")
         "runEvery${updateIntervalCmd}"(refresh)
     } else (unschedule("refresh"))
+
+    sendEvent(name: "calFactor", value: settings?.calibrationFactor)
 }
 
 def parse(String description) {
-}
-
-def setDayOnlyRefresh() {
-    if (!settings?.dayUpdateOnly) {device.updateSetting("dauUpdateOnly",[value:"true", type:"bool"])}
-    def riseAndSet = getSunriseAndSunset(sunriseOffset: -30, sunsetOffset: +30)   
-    def calendar = Calendar.getInstance()
-
-    // schedule autoUpdate to turn on at sunrise
-    calendar.setTime(riseAndSet.sunrise)
-    def startSchedule = "0 ${calendar.get(Calendar.MINUTE)} ${calendar.get(Calendar.HOUR_OF_DAY)} * * ?"
-    schedule(startSchedule, enableAutoUpdate) 
-    
-    // schedule autoUpdate to turn off at sunset
-    calendar.setTime(riseAndSet.sunset)
-    def stopSchedule = "0 ${calendar.get(Calendar.MINUTE)} ${calendar.get(Calendar.HOUR_OF_DAY)} * * ?"
-    schedule(stopSchedule, disableAutoUpdate)
-
-    sendEvent(name: "calcStart", value: riseAndSet.sunrise)
-    sendEvent(name: "calcStop", value: riseAndSet.sunset)
-}
-
-def enableAutoUpdate() {
-    device.updateSetting("autoUpdate",[value:"true", type:"bool"])
-    updated()
-}
-
-def disableAutoUpdate() {
-    device.updateSetting("autoUpdate",[value:"false", type:"bool"])
-    updated()
 }
 
 def refresh() {
@@ -126,6 +100,8 @@ def refresh() {
     def irradiance = calculateSolarIrradiance(coords.altitude, coords.azimuth)
     def lux = Math.round(calculateIlluminance(irradiance))
     def calLux = Math.round(applyCalibrations(lux))
+/*     if (device.currentValue("altitude") > 6) {calLux = Math.round(applyCalibrations(lux))}
+    else calLux = lux */
 
     sendEvent(name: "altitude", value: coords.altitude)
     sendEvent(name: "azimuth", value: coords.azimuth)
@@ -134,30 +110,6 @@ def refresh() {
     sendEvent(name: "rawLux", value: lux)
     sendEvent(name: "lastCalculated", value: new Date().format("yyyy-MM-dd h:mm", location.timeZone))
 
-}
-
-def applyCalibrations(luxValue) {
-    def factor = settings?.calibrationFactor ?: 1.0
-    def offset = settings?.calibrationOffset ?: 1.0
-    def altitude = device.currentValue("altitude") ?: 1.0
-    
-    // Ensure factor is a numeric type
-    if (factor instanceof String && factor.isNumber()) {
-        factor = factor.toDouble()
-    } else if (factor instanceof Integer || factor instanceof BigDecimal) {
-        factor = factor.toDouble()
-    }
-    def calibratedValue = luxValue * factor
-    // Apply Difference Offset
-    calibratedValue = calibratedValue + offset    
-
-    
-    if (factor < 0) {calibratedValue = luxValue - (Math.abs(calibratedValue) - luxValue)} // negative calibration
-
-    // Ensure lux gets to 0 but not less
-    if (altitude < -4.2 || calibratedValue < 0) {calibratedValue = 0}
-
-    return calibratedValue
 }
 
 ///
@@ -234,42 +186,91 @@ def getPosition() {
     ]
 }
 
-// --- NEW CALCULATION METHODS ADDED BELOW ---
+// --- NEW PREFENCES AND CALCULATION METHODS ADDED BELOW ---
+
+def setDayOnlyRefresh() {
+    def offset = settings?.dayUpdateMinutesOffset.toInteger()
+    if (!settings?.dayUpdateOnly) {device.updateSetting("dauUpdateOnly",[value:"true", type:"bool"])}
+    def riseAndSet = getSunriseAndSunset(sunriseOffset: -offset, sunsetOffset: offset)   
+    def calendar = Calendar.getInstance()
+
+    // schedule autoUpdate to turn on at sunrise
+    calendar.setTime(riseAndSet.sunrise)
+    def startSchedule = "0 ${calendar.get(Calendar.MINUTE)} ${calendar.get(Calendar.HOUR_OF_DAY)} * * ?"
+    schedule(startSchedule, enableAutoUpdate) 
+    
+    // schedule autoUpdate to turn off at sunset
+    calendar.setTime(riseAndSet.sunset)
+    def stopSchedule = "0 ${calendar.get(Calendar.MINUTE)} ${calendar.get(Calendar.HOUR_OF_DAY)} * * ?"
+    schedule(stopSchedule, disableAutoUpdate)
+
+    sendEvent(name: "calcStart", value: riseAndSet.sunrise)
+    sendEvent(name: "calcStop", value: riseAndSet.sunset)
+}
+
+def enableAutoUpdate() {
+    device.updateSetting("autoUpdate",[value:"true", type:"bool"])
+    updated()
+}
+
+def disableAutoUpdate() {
+    device.updateSetting("autoUpdate",[value:"false", type:"bool"])
+    updated()
+}
+
+def applyCalibrations(luxValue) {
+    def factor = settings?.calibrationFactor ?: 1.0
+    def offset = settings?.calibrationOffset ?: 1.0
+    def altitude = device.currentValue("altitude") ?: 1.0
+    
+    // Ensure factor is a numeric type
+    if (factor instanceof String && factor.isNumber()) {
+        factor = factor.toDouble()
+    } else if (factor instanceof Integer || factor instanceof BigDecimal) {
+        factor = factor.toDouble()
+    }
+
+    def calibratedValue = luxValue * factor
+    if (factor < 0) {calibratedValue = luxValue - (Math.abs(calibratedValue) - luxValue)} // negative calibration
+
+    // Apply Difference
+    calibratedValue = calibratedValue + offset
+
+    // Ensure lux gets to 0 but not less
+    if (altitude < -4.2 || calibratedValue < 0) {calibratedValue = 0}
+
+    return calibratedValue
+}
 
 /**
- * Calculates solar irradiance (W/m²) on a surface with a given tilt.
- * Modified to account for civil twilight (sun altitude 0 to twilightLimit degrees).
  * @param altitude Sun's altitude in degrees.
  * @param azimuth Sun's azimuth in degrees.
  * @return Solar irradiance in W/m².
  */
 def calculateSolarIrradiance(altitude, azimuth) {
+    if (altitude > 6.0) {
+        return standardIrradianceCalculation(altitude, azimuth)
+    } else return twilightIrradianceCalculation(altitude, azimuth)
+}
+
+def twilightIrradianceCalculation(altitude, azimuth) {
     // Get the user's twilight limit (must be negative, default -6)
     def twilightLimit = settings?.twilightLimit ?: -6.0
 
-    // 1. Sun is above the horizon: use the standard calculation.
-    if (altitude > 0) {
-        return standardIrradianceCalculation(altitude, azimuth)
-    }
-
-    // 2. Sun is in twilight (between 0 and twilightLimit): calculate reduced irradiance.
-    if (twilightLimit < 0 && altitude > twilightLimit && altitude <= 0) {
-        // Linear fade from 100% at 0° to 0% at twilightLimit.
-        def twilightFraction = 1 - (Math.abs(altitude) / Math.abs(twilightLimit))
-        def horizonIrradiance = standardIrradianceCalculation(0, azimuth)
-        def twilightIrradiance = horizonIrradiance * twilightFraction
-        return Math.round(twilightIrradiance * 10) / 10.0
-    }
-
-    // 3. Sun is below the twilight limit (night): return 0.
-    return 0.0
+    if (twilightLimit < 0 && altitude > -5.0 && altitude <= 6.1) {
+        // Linear fade based on reducing an irradiance based on an altitude adding the twilight offset
+        def altOffset = altitude + (Math.abs(twilightLimit)) 
+        def twilightIrradiance = standardIrradianceCalculation(altOffset, azimuth) * 0.09
+        log.debug "TwilightIrradiance is ${twilightIrradiance}"
+        return twilightIrradiance
+    } else {return 0.0} // 3. Sun is below the twilight limit (night): return 0.
 }
 
 /**
- * Contains the original irradiance physics calculation.
- * Separated for clarity and re-use.
+  * irradiance physics calculation.
+  * Calculates solar irradiance (W/m²) on a surface with a given tilt.
  */
-private def standardIrradianceCalculation(altitude, azimuth) {
+ def standardIrradianceCalculation(altitude, azimuth) {
     def incidenceAngleDeg = settings?.incidenceAngle ?: 0
     def incidenceAngleRad = Math.toRadians(incidenceAngleDeg)
     def altitudeRad = Math.toRadians(altitude)
@@ -288,7 +289,7 @@ private def standardIrradianceCalculation(altitude, azimuth) {
 
     // Atmospheric transmittance
     // Use a minimum altitude of 0.1 degrees for air mass calculation to avoid extreme values
-    def apparentAltitudeForAirMass = altitude  //Math.max(altitude, 0.1)
+    def apparentAltitudeForAirMass = altitude//Math.max(altitude, 0.1)
     def airMass = 1.0 / (Math.sin(Math.toRadians(apparentAltitudeForAirMass)) + 0.50572 * Math.pow(apparentAltitudeForAirMass + 6.07995, -1.6364))
     def transmittance = Math.exp(-0.2 * airMass)
 
@@ -309,14 +310,12 @@ def calculateIlluminance(irradiance) {
 
 
 /**
-* Set Sensor Illuminance from an external source
+* Set Sensor Illuminance from an external sensor
 */
 def setSensorIlluminance(lux) {
+    if (settings?.sensorUpdate) {refresh()}
 	sendEvent(name: "sensorIlluminance", value: lux)
-
-    if (settings?.sensorUpdate) refresh()
 }
-
 
 
 
