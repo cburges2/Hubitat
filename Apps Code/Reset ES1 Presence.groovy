@@ -131,7 +131,7 @@ def initialize() {
     subscribe(location, "systemStart", "hubRestartHandler")
 
     // subscribe to turn USB switch back on if it gets turned off (using resetDelay)
-    //subscribe(switches, "switch", switchEventHandler)
+    subscribe(switches, "switch", switchEventHandler)
 
     if (resetSwitch) {subscribe(resetSwitch, "switch", switchHandler)}
 
@@ -154,7 +154,7 @@ def switchHandler(evt) {
 
 // Turn a switch back on if it gets turned off accidentially - but ignore this when they are turned off by this app dong the action
 def switchEventHandler(evt) {
-    
+    logDebug("${evt.descriptionText}")
     if (evt.value == "off" && state?.action == "idle") {
         logDebug("${evt.displayName} turned off")
         runIn(resetDelay, turnOnSwitches)    
@@ -162,22 +162,18 @@ def switchEventHandler(evt) {
 }
 
 def scheduleHandler() {
-    state.action = "schedule"
     restartSensors()
     runIn(resetDelay+10, resetAction)
 }
 
 def hubRestartHandler(evt) {
-    state.action = "reboot"
     runIn(rebootDelay, restartSensors)
     runIn(rebootDelay+10,resetAction)
 }
 
-def resetAction() {
-    state.action = "idle"
-}
-
+// Restart Sensors
 def restartSensors() {
+    state.action = "restart"
     turnOffSwitches()
     runIn(resetDelay,turnOnSwitches)  
 }
@@ -188,14 +184,13 @@ def turnOnSwitches() {
     state.switchCount = 0
     pauseOn()
 }
-
 def pauseOn() {
     logDebug("pauseOn called with ${state?.switchCount}")
     switches[state?.switchCount].on()
     if (state?.switchCount < state?.numSwitches - 1) {
         state.switchCount = state?.switchCount + 1
         runInMillis(executeDelay.toInteger(), 'pauseOn')
-    }
+    } else {state.action = "idle"}
 }
 
 def turnOffSwitches() {
@@ -203,7 +198,6 @@ def turnOffSwitches() {
     state.switchCount = 0
     pauseOff()
 }
-
 def pauseOff() {
     logDebug("pauseOff called with ${state?.switchCount}")
     switches[state?.switchCount].off()
