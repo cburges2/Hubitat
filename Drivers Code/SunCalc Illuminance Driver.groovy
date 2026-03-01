@@ -51,7 +51,8 @@
 
   * SunCalc Illuminance Driver - Initial Release
 
-  * Version 1.0.0-beta - 02-28-26 - Functioning beta version with Calculated Illuminance, Sensor Illuminance, Condition Calcs, and Contact Sensor features. 
+  * V1.0.0-beta - 02-28-26 - Functioning beta version with Calculated Illuminance, Sensor Illuminance, Condition Calcs, and Contact Sensor features. 
+  * V1.0.1 - 03/01/26 - Adding minAltitude setting for conditions caused a Bug in setting contact sensor - fixed
  */
 
 metadata {
@@ -518,7 +519,7 @@ def determineCloudConditions(altitude) {
     if (logEnable) logDebug("Sky Condition is ${skyCondition}")       
     
     // Set Contact Sensor
-    if (altitude > minAltitude) {setContactSensor(sensorPercent, condition)} else {setContact("open")}
+    if (altitude > settings?.minAltitude.toFloat()) {setContactSensor(sensorPercent, condition)} else {setContact("open")}
 
     return condition
 }
