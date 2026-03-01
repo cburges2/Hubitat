@@ -40,6 +40,17 @@ def mainPage() {
             )
         }    
 
+        section("<b>USB Switch Devices to Reset Sensors</b>") {
+
+            input (
+              name: "resetSwitch", 
+              type: "capability.switch", 
+              title: "Select a Virtual Switch to Reset Sensors Manually. Switch will turn off when reset is complete (optional)", 
+              required: false, 
+              multiple: false          
+            )
+        }     
+
         section("<b>Days are: SUN MON TUE WED THU FRI SAT. Use Ranges (MON-FRI) or comma separated Individual Days (TUE,THU)<br>Enter NONE to not schedule any days</b>"){}
 
         section("<b>Back Hall</b>") {
@@ -120,7 +131,9 @@ def initialize() {
     subscribe(location, "systemStart", "hubRestartHandler")
 
     // subscribe to turn USB switch back on if it gets turned off (using resetDelay)
-    subscribe(switches, "switch", switchEventHandler)
+    //subscribe(switches, "switch", switchEventHandler)
+
+    if (resetSwitch) {subscribe(resetSwitch, "switch", switchHandler)}
 
     // Set the schedule
     def timeStr = settings?.resetTime.toString()
@@ -133,7 +146,13 @@ def initialize() {
     schedule(scheduled, scheduleHandler)
 }    
 
-// Turn switch back on if it gets turned off accidentially - but ignore this when they are turned off by this app dong the action
+// optional switch to reset all sensors
+def switchHandler(evt) {
+    
+    if (evt.value == "on") {restartSensors()}
+}
+
+// Turn a switch back on if it gets turned off accidentially - but ignore this when they are turned off by this app dong the action
 def switchEventHandler(evt) {
     
     if (evt.value == "off" && state?.action == "idle") {
@@ -164,27 +183,34 @@ def restartSensors() {
 }
 
 def turnOnSwitches() {
-    if (settings?.debugMode) logDebug("Turning on switches")
-    for (t=0; t < switches.size(); t++) {
-        pauseOn(t)
+    resetSwitch.off()
+    state.numSwitches = switches.size()
+    state.switchCount = 0
+    pauseOn()
+}
+
+def pauseOn() {
+    logDebug("pauseOn called with ${state?.switchCount}")
+    switches[state?.switchCount].on()
+    if (state?.switchCount < state?.numSwitches - 1) {
+        state.switchCount = state?.switchCount + 1
+        runInMillis(executeDelay.toInteger(), 'pauseOn')
     }
 }
 
-def pauseOn(t) {
-    pauseExecution(executeDelay.toInteger()) 
-    switches[t].on()
-}
-
 def turnOffSwitches() {
-    if (settings?.debugMode) logDebug("Turning off switches")
-    for (t=0; t < switches.size(); t++) {
-        pauseOff(t)
-    } 
+    state.numSwitches = switches.size()
+    state.switchCount = 0
+    pauseOff()
 }
 
-def pauseOff(t) {
-    pauseExecution(executeDelay.toInteger()) 
-    switches[t].off()
+def pauseOff() {
+    logDebug("pauseOff called with ${state?.switchCount}")
+    switches[state?.switchCount].off()
+    if (state?.switchCount < state?.numSwitches - 1) {
+        state.switchCount = state?.switchCount + 1
+        runInMillis(executeDelay.toInteger(), 'pauseOff')
+    }
 }
 
 def logDebug(txt){
