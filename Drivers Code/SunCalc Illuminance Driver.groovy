@@ -577,7 +577,7 @@ def getLuxAltitudeFactor(altitude)  {
     if (altitude >= (noonAltitude * 0.5)) {preFactor = Math.pow((altitude / (noonAltitude * noonMultiplier)), (power - 3.5)); if (logEnable) logDebug("high - preFactor is ${preFactor}")}
     else if (altitude >= (maxAltitude * 0.5) && altitude < (noonAltitude * 0.5)) {preFactor = Math.pow(1 - (altitude / maxAltitude), (power - 1.0)); if (logEnable) logDebug("mid - preFactor is ${preFactor}")}
     else if (altitude < (maxAltitude * 0.5) && altitude > 8.0) {preFactor = Math.pow(1 - (altitude / maxAltitude), (power)); if (logEnable) logDebug("low - preFactor is ${preFactor}")}    
-    else if (altitude <= 8.0) {preFactor = Math.pow(1 - (altitude / (maxAltitude + 0.5)), (power)); if (logEnable) logDebug("lowest - preFactor is ${preFactor}")}
+    else if (altitude <= 8.0) {preFactor = Math.pow(1 - (altitude / (maxAltitude + 0.5)), (power - 1.0)); if (logEnable) logDebug("lowest - preFactor is ${preFactor}")}
 
     def factor = 1 - preFactor; if (logEnable) logDebug("Factor is ${factor}")
 
