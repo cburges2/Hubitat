@@ -51,8 +51,9 @@
 
   * SunCalc Illuminance Driver - Initial Release
 
-  * V1.0.0-beta - 02-28-26 - Functioning beta version with Calculated Illuminance, Sensor Illuminance, Condition Calcs, and Contact Sensor features. 
-  * V1.0.1 - 03/01/26 - Adding minAltitude setting for conditions caused a Bug in setting contact sensor - fixed
+  * V1.0.0-beta - 02-28-26 - Functioning beta version with Calculated Illuminance, Sensor Illuminance, Condition Calcs, and Contact Sensor features.
+  * V1.0.1 - 03/01/26 - Adding of minAltitude setting for conditions caused a Bug in setting contact sensor - fixed. Also bumped power down by 1 for < 8 altitide.
+                        Fixed Cloudy sunCondition not being added the conditions list. 
  */
 
 metadata {
@@ -412,13 +413,6 @@ def setSensorIlluminance(lux) {
     }     
 }
 
-// use the updated sensor lux and caluclated illuminance to set and update conditions
-/* def setConditions(illuminance, lux, altitude) {
-    //def difference = illuminance - lux
-    
-    
-} */
-
 /*
 * -- Set Current Condition  --
 */ 
@@ -432,7 +426,7 @@ def updateConditions(altitude) {
     if (logEnable) logDebug("altitude ${altitude}") 
     def minAltitude = settings?.minAltitude.toFloat()
 
-    // when conditions cannot be calculated below 6.5 altitude, condition is set as the time period name, based on altitude and oscillation
+    // when conditions cannot be calculated below minAltitude, condition is set as the time period name, based on altitude and oscillation
     if (altitude >= minAltitude) {
         condition = determineCloudConditions(altitude)    // calculate condition from lux sensor and calculated lux at higher altitudes
     } else if (altitude >= 1.0) { 
@@ -492,7 +486,7 @@ def determineCloudConditions(altitude) {
     def partly = settings?.partly.toFloat(); def mostly = settings?.mostly.toFloat() 
     def cloudy = settings?.cloudy.toFloat(); def diminished = settings?.diminished.toFloat()  
 
-    if (sensorPercent > partly) {sunCondition = "Sunny";} 
+    if (sensorPercent >= partly) {sunCondition = "Sunny";} 
     else if (sensorPercent < partly && sensorPercent >= mostly) {sunCondition = "Partly Sunny"}
     else if (sensorPercent < mostly && sensorPercent >= cloudy) {sunCondition = "Mostly Cloudy"}
     else if (sensorPercent < cloudy && sensorPercent > diminished) {sunCondition = "Cloudy"}
@@ -500,7 +494,7 @@ def determineCloudConditions(altitude) {
     if (logEnable) logDebug("Sun Condition is ${sunCondition}")   
 
     // add to condition lists and get modifier from cloudy percentage
-    if (sunCondition == "Diminished Light" || sunCondition == "Mostly Cloudy") {addConditionToList("Cloudy")} 
+    if (sunCondition == "Diminished Light" || sunCondition == "Mostly Cloudy" || sunCondition == "Cloudy") {addConditionToList("Cloudy")} 
     if (sunCondition == "Sunny" || sunCondition == "Partly Sunny") {addConditionToList("Sunny")}
     def cloudPercent = getCondtionPercentage()
     
