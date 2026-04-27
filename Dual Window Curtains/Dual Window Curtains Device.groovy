@@ -50,8 +50,14 @@ def initAttributes() {
     eventSend("switch", "off")
     eventSend("level", 0)
     eventSend("position", 0)
+    eventSend("positionLeft", 0)
+    eventSend("positionRight", 0)
     eventSend("speed", 100)
     eventSend("windowShade", "closed") 
+    eventSent("batteryLeft", 100)
+    eventSent("batteryRight", 100)
+    eventSent("battery", 100)
+
 }
 
 def updated() {
