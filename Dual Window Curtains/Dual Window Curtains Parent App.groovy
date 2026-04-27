@@ -82,9 +82,10 @@ def initialize() {
 def leftShadeHandler(evt) {
     logDebug("leftShadeHandler called with ${evt.name} and ${evt.value}")
 
-    if (evt.name == "position" || evt.name == "level") {
+    if (evt.name == "position" || evt.name == "level" || evt.name == "battery") {
          updateDriver(evt.name, evt.value)
          if (evt.name == "position") updateDriver("positionLeft", evt.value)
+         if (evt.name  == "battery") {updateBattery("left", evt.value.toInteger())}
     }
     else { // if(rightShade.currentValue(evt.name) == evt.value) {
         pauseExecution(50)
@@ -97,12 +98,33 @@ def rightShadeHandler(evt) {
 
     if (evt.name == "position" || evt.name == "level") {
          updateDriver(evt.name, evt.value) 
-         if (evt.name == "position") updateDriver("positionRight", evt.value)       
+         if (evt.name == "position") updateDriver("positionRight", evt.value)  
+         if (evt.name  == "battery") {updateBattery("right", evt.value.toInteger())}     
     }
     else {//if (leftShade.currentValue(evt.name) == evt.value) {
         pauseExecution(50)
         updateDriver(evt.name, evt.value)
     }
+}
+
+def updateBattery(side,value) {
+    
+    def left
+    def right
+    if (side == "left") {
+        left = value
+        right = rightShade.currentValue("battery").toInteger()
+        updateDriver("batteryLeft", left)
+    }
+    if (side == "right") {
+        right = value
+        left = leftShade.currentValue("battery").toInteger()
+        updateDriver("batteryRight", right)
+    }
+
+    def battery = Math.round((left.toFloat() + right.toFloat()) / 2.0)
+    updateDriver("battery", battery)
+    
 }
 
 def updateDriver(name, value) {

@@ -17,10 +17,14 @@ metadata {
         capability "Switch"
         capability "Switch Level"
         capability "ChangeLevel"
+        capability "Battery"
 
 		attribute "speed", "integer"
         attribute "positionLeft", "integer"
         attribute "positionRight", "integer"
+        attribute "batteryLeft", "number"
+        attribute "batteryRight", "number"
+        attribute "battery", "number"
 
 		command "stepClose", [[name: "step", type: "NUMBER", description: "Amount to change position towards close."]]
 		command "stepOpen", [[name: "step",	type: "NUMBER",	description: "Amount to change position towards open."]]
