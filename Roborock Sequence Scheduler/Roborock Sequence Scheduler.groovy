@@ -58,7 +58,8 @@ Version History:
  *  v. 2.31 - 11/01/26 - Fixed Map<String,def> generic syntax error in updateVisualLights()
  *  v. 2.32 - 11/01/26 - Added vac block separators/headers in UI; clarified light is optional
  *  v. 2.33 - 11/02/26 - Added light dim level setting; Added yellow color for delay waiting states
-  * v. 2.34 - 11/02/26 - Added custom hue inputs for each color signal state
+ *  v. 2.34 - 11/02/26 - Added custom hue inputs for each color signal state
+ *  v. 2.35 - 11/03/26 - Split block timeouts: 30min default for room blocks, 12hr default for seq blocks
  *
  **/
 
@@ -66,10 +67,10 @@ import java.text.SimpleDateFormat
 import groovy.json.JsonSlurper
 
 definition (
-    name: "Roborock Sequence Scheduler",
+    name: "Roborock Sequence Scheduler AI",
     namespace: "Hubitat",
     author: "Chris Burgess",
-    description: "Multi-Vac Roborock Room Scheduler for use with the Hubitat Community Integeration Roborock Vacuum by @Bloodtick_Jones",
+    description: "Multi-Vac Room Scheduler",
     category: "My Apps",
     iconUrl: "",
     iconX2Url: ""
@@ -300,7 +301,8 @@ void buildDelayEngineSection() {
     section("Delay Engine") {
         paragraph "Delay devices, attributes, and trigger values are configured per-room and per-sequence below."
         input (name: "delayCheckInterval", type: "number", title: "Retry check interval while paused (minutes)", defaultValue: 5, range: "1..30", required: true, width: 12)
-        input (name: "maxBlockWaitHours", type: "number", title: "Max hours to wait for a blocked sequence/room before dropping it", defaultValue: 12, range: "1..48", required: true, width: 12)
+        input (name: "maxBlockWaitHours", type: "number", title: "Max hours to wait for a blocked sequence to start before dropping it", defaultValue: 12, range: "1..48", required: true, width: 12)
+        input (name: "maxRoomBlockWaitMinutes", type: "number", title: "Max minutes to wait for a blocked room before skipping to the next room", defaultValue: 30, range: "1..180", required: true, width: 12)
     }
 }
 
@@ -847,12 +849,12 @@ void updateVisualLights() {
             String stateStr = desiredStates[lid] ?: "off"
             int level = (settings["vac${i}LightLevel"] ?: 100) as int
             if (level <= 0 || level > 100) level = 100
-         
+            
             int hueG = (settings["vac${i}LightHueGreen"] != null) ? settings["vac${i}LightHueGreen"].toString().toInteger() : 33
             int hueY = (settings["vac${i}LightHueYellow"] != null) ? settings["vac${i}LightHueYellow"].toString().toInteger() : 16
             int hueR = (settings["vac${i}LightHueRed"] != null) ? settings["vac${i}LightHueRed"].toString().toInteger() : 0
             int hueB = (settings["vac${i}LightHueBlue"] != null) ? settings["vac${i}LightHueBlue"].toString().toInteger() : 66
-
+            
             if (stateStr == "green") {
                 light.setColor([hue: hueG, saturation: 100, level: level])
             } else if (stateStr == "red") {
@@ -1050,13 +1052,17 @@ void executeSequenceEngine(Map data) {
 
     String blockingDevice = getRoomDelayBlockingDevice(seqIdx, currentRoomCode)
     if (blockingDevice != null) {
-        long maxMs = ((settings.maxBlockWaitHours ?: 12) as long) * 3600000L
+        // Room block timeout: use maxRoomBlockWaitMinutes (default 30)
+        int maxMin = (settings.maxRoomBlockWaitMinutes ?: 30) as int
+        long maxMs = (maxMin as long) * 60000L
         long blockedSince = (seqState.roomBlockedSince ?: now()) as long
         
         if (now() - blockedSince > maxMs) {
-            log.warn "Room ${roomLabel} TIMED OUT waiting for block to clear. Skipping to next room."
-            updateDashboardHtml("Room timeout. Skipping.")
+            log.warn "Room ${roomLabel} TIMED OUT waiting for block to clear (${maxMin} min). Skipping to next room."
+            // Emit skip status first so it logs as a distinct child-device event
+            updateDashboardHtml("${getSeqName(seqIdx)}: Skipped room '${roomLabel}' (blocked by ${blockingDevice} for ${maxMin}+ min)")
             seqState.roomBlockedSince = null
+            seqState.pausedForDelay = false
             state.activeSequences[seqKey] = seqState
             executeSequenceEngine([seqIdx: seqIdx, targetStep: targetStep + 1])
             return
