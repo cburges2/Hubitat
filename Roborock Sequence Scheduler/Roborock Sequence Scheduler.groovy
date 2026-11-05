@@ -61,6 +61,27 @@ Version History:
  *  v. 2.34 - 11/02/26 - Added custom hue inputs for each color signal state
  *  v. 2.35 - 11/03/26 - Split block timeouts: 30min default for room blocks, 12hr default for seq blocks
  *  v. 2.36 - 11/05/26 - Check vacuum error attributes at sequence completion to ensure error lights
+ *  v. 2.38 - 11/05/26 - Fixed silent hue parse failures; reliable vac ID matching; explicit logging;
+ *  v. 2.37 - 11/05/26 - Robust error subscriptions, periodic safety refresh, refresh on state change
+ *  v. 2.38 - 11/05/26 - Fixed silent hue parse failures; reliable vac ID matching; belt-and-suspenders off
+ *  v. 2.39 - 11/05/26 - Removed 1-minute polling workaround; relying on fixed subscriptions
+ *  v. 2.40 - 11/05/26 - Detect authorization errors; preserve room config; purple light; recover on healthStatus=online 
+ **/
+
+/**
+ *  **************** Roborock Sequence Scheduler  ****************
+ *
+ *  v. 2.30 - 11/01/26 - Added per-vac color light for running state and error alerts
+ *  v. 2.31 - 11/01/26 - Fixed Map<String,def> generic syntax error in updateVisualLights()
+ *  v. 2.32 - 11/01/26 - Added vac block separators/headers in UI; clarified light is optional
+ *  v. 2.33 - 11/02/26 - Added light dim level setting; Added yellow color for delay waiting states
+ *  v. 2.34 - 11/02/26 - Added custom hue inputs for each color signal state
+ *  v. 2.35 - 11/03/26 - Split block timeouts: 30min default for room blocks, 12hr default for seq blocks
+ *  v. 2.36 - 11/05/26 - Check vacuum error attributes at sequence completion to ensure error lights show
+ *  v. 2.37 - 11/05/26 - Robust error subscriptions, periodic safety refresh, refresh on state change
+ *  v. 2.38 - 11/05/26 - Fixed silent hue parse failures; reliable vac ID matching; belt-and-suspenders off
+ *  v. 2.39 - 11/05/26 - Removed 1-minute polling workaround; relying on fixed subscriptions
+ *  v. 2.40 - 11/05/26 - Detect authorization errors; preserve room config; purple light; recover on healthStatus=online
  *
  **/
 
@@ -68,7 +89,7 @@ import java.text.SimpleDateFormat
 import groovy.json.JsonSlurper
 
 definition (
-    name: "Roborock Sequence Scheduler",
+    name: "Roborock Sequence Scheduler AI",
     namespace: "Hubitat",
     author: "Chris Burgess",
     description: "Multi-Vac Room Scheduler",
@@ -151,6 +172,24 @@ boolean isClearErrorValue(String val) {
     return false
 }
 
+boolean isAuthErrorValue(String val) {
+    if (val == null) return false
+    String lower = val.trim().toLowerCase()
+    if (lower == "") return false
+    return lower.contains("authoriz") || (lower.contains("auth") && lower.contains("error"))
+}
+
+int getHueSafe(String key, int defaultHue) {
+    def v = settings[key]
+    if (v == null) return defaultHue
+    try {
+        return v.toString().toBigDecimal().intValue()
+    } catch (Exception e) {
+        log.warn "RR-Scheduler: Invalid hue for ${key}: '${v}' - using default ${defaultHue}"
+        return defaultHue
+    }
+}
+
 // ---------------------------------------------------------------------------
 // UI Sections
 // ---------------------------------------------------------------------------
@@ -203,12 +242,13 @@ void buildVacuumSetupSection(int numVacs) {
             input (name: "vac${i}Light", type: "capability.colorControl", title: "Visual State Light (optional)", required: false, submitOnChange: true, width: 8)
             input (name: "vac${i}LightLevel", type: "number", title: "Level (1-100)", defaultValue: 100, range: "1..100", required: false, submitOnChange: true, width: 4)
             
-            input (name: "vac${i}LightHueGreen", type: "number", title: "Green Hue", defaultValue: 33, range: "0..100", required: false, submitOnChange: true, width: 3)
-            input (name: "vac${i}LightHueYellow", type: "number", title: "Yellow Hue", defaultValue: 16, range: "0..100", required: false, submitOnChange: true, width: 3)
-            input (name: "vac${i}LightHueRed", type: "number", title: "Red Hue", defaultValue: 0, range: "0..100", required: false, submitOnChange: true, width: 3)
-            input (name: "vac${i}LightHueBlue", type: "number", title: "Blue Hue", defaultValue: 66, range: "0..100", required: false, submitOnChange: true, width: 3)
+            input (name: "vac${i}LightHueGreen", type: "number", title: "Green Hue", defaultValue: 33, range: "0..100", required: false, submitOnChange: true, width: 2)
+            input (name: "vac${i}LightHueYellow", type: "number", title: "Yellow Hue", defaultValue: 16, range: "0..100", required: false, submitOnChange: true, width: 2)
+            input (name: "vac${i}LightHueRed", type: "number", title: "Red Hue", defaultValue: 0, range: "0..100", required: false, submitOnChange: true, width: 2)
+            input (name: "vac${i}LightHueBlue", type: "number", title: "Blue Hue", defaultValue: 66, range: "0..100", required: false, submitOnChange: true, width: 2)
+            input (name: "vac${i}LightHuePurple", type: "number", title: "Purple Hue", defaultValue: 75, range: "0..100", required: false, submitOnChange: true, width: 2)
             
-            paragraph "<i style='font-size:12px; color:#666;'>Leave light blank to disable visual state signals for this vacuum. If set, light turns green while this vac is running a sequence, yellow when waiting on a delay, red on error, blue for water tank issues, and off when idle or cleared.</i>"
+            paragraph "<i style='font-size:12px; color:#666;'>Leave light blank to disable visual state signals for this vacuum. If set, light turns green while this vac is running a sequence, yellow when waiting on a delay, red on error, blue for water tank issues, purple for authorization errors, and off when idle or cleared.</i>"
         }
     }
     section("") {
@@ -231,6 +271,7 @@ void buildGlobalMatrixEngine(int numVacs) {
         return
     }
 
+    Map authErrs = (state.authErrored ?: [:]) as Map
     Map tempMatrix = [:]
     String keyString = ""
     int maxButton = 0
@@ -240,8 +281,29 @@ void buildGlobalMatrixEngine(int numVacs) {
         if (!vac) continue
 
         String vacLabel = vac.getLabel() ?: "Vac ${i}"
+        boolean authError = (authErrs["${i}"] == true)
+
+        if (authError) {
+            // Preserve existing rooms for auth-errored vac
+            int preserved = 0
+            state.globalRoomMatrix?.each { key, data ->
+                if (data?.vacuumIndex == i) {
+                    tempMatrix[key] = data
+                    int bc = (data.buttonCode ?: 0) as int
+                    if (bc > maxButton) maxButton = bc
+                    keyString += "${bc}: ${data.roomName} (${data.vacLabel})<br>"
+                    preserved++
+                }
+            }
+            logDebug "buildGlobalMatrixEngine: preserved ${preserved} rooms for auth-errored vac ${i}"
+            continue
+        }
+
         def roomsRaw = vac.currentValue("rooms")
-        if (!roomsRaw) continue
+        if (!roomsRaw) {
+            logDebug "Vac${i} has no 'rooms' attribute (not auth-errored; will skip)"
+            continue
+        }
 
         Map numKeyMap = null
         try {
@@ -589,6 +651,7 @@ def appButtonHandler(String buttonName) {
                 app.removeSetting("vac${vCur}LightHueYellow")
                 app.removeSetting("vac${vCur}LightHueRed")
                 app.removeSetting("vac${vCur}LightHueBlue")
+                app.removeSetting("vac${vCur}LightHuePurple")
                 app.updateSetting("numVacs", [type: "number", value: vCur - 1])
             }
             break
@@ -676,6 +739,9 @@ def initialize() {
     if (state.lastErrorAnnounce == null) state.lastErrorAnnounce = [:]
     if (state.sentVacLists == null) state.sentVacLists = [:]
     if (state.sentBinPercents == null) state.sentBinPercents = [:]
+    if (state.authErrored == null) state.authErrored = [:]
+
+    Map authErrs = (state.authErrored ?: [:]) as Map
 
     int numVacs = (settings["numVacs"] ?: 0) as int
     if (numVacs > 0) {
@@ -687,13 +753,34 @@ def initialize() {
             if (vacDevice) {
                 subscribe(vacDevice, "state", "vacuumStateHandler")
                 try {
-                    Set attrNames = vacDevice.getSupportedAttributes()?.collect { it.getName() } ?: [] as Set
-                    if ("error" in attrNames) subscribe(vacDevice, "error", "vacuumErrorHandler")
-                    if ("dockError" in attrNames) subscribe(vacDevice, "dockError", "vacuumErrorHandler")
-                } catch (Exception e) {}
+                    subscribe(vacDevice, "error", "vacuumErrorHandler")
+                    logDebug "Subscribed to 'error' on ${vacDevice.displayName}"
+                } catch (Exception e) {
+                    logDebug "Could not subscribe to 'error' on ${vacDevice.displayName}: ${e.message}"
+                }
+                try {
+                    subscribe(vacDevice, "dockError", "vacuumErrorHandler")
+                    logDebug "Subscribed to 'dockError' on ${vacDevice.displayName}"
+                } catch (Exception e) {
+                    logDebug "Could not subscribe to 'dockError' on ${vacDevice.displayName}: ${e.message}"
+                }
+                try {
+                    subscribe(vacDevice, "healthStatus", "healthStatusHandler")
+                    logDebug "Subscribed to 'healthStatus' on ${vacDevice.displayName}"
+                } catch (Exception e) {
+                    logDebug "Could not subscribe to 'healthStatus' on ${vacDevice.displayName}: ${e.message}"
+                }
+
+                // Re-check current state to seed auth-errored flag correctly
+                def currentState = vacDevice.currentValue("state")?.toString() ?: ""
+                if (isAuthErrorValue(currentState)) {
+                    authErrs["${i}"] = true
+                    logDebug "initialize: vac${i} ${vacDevice.displayName} currently in authorization-error state"
+                }
             }
         }
     }
+    state.authErrored = authErrs
 
     Map subsByAttr = [:]  
     int numSeqs = (settings["numSequences"] ?: 1) as int
@@ -771,7 +858,12 @@ void manageChildDevice() {
 
 void refreshVacuumErrors() {
     int numVacs = (settings["numVacs"] ?: 0) as int
+    Map authErrs = (state.authErrored ?: [:]) as Map
     for (int i = 1; i <= numVacs; i++) {
+        if (authErrs["${i}"] == true) {
+            logDebug "refreshVacuumErrors: skipping auth-errored vac${i}"
+            continue
+        }
         def vac = settings?."vac${i}"
         if (!vac) continue
         
@@ -796,7 +888,8 @@ void refreshVacuumErrors() {
 
 void updateVisualLights() {
     if (!state.activeSequences) state.activeSequences = [:]
-    Map desiredStates = [:] // lightId -> state ("green", "red", "blue", "yellow", "off")
+    Map desiredStates = [:] // lightId -> state ("green", "red", "blue", "yellow", "purple", "off")
+    Map authErrs = (state.authErrored ?: [:]) as Map
     
     int numVacs = (settings["numVacs"] ?: 0) as int
     
@@ -807,9 +900,17 @@ void updateVisualLights() {
         String lid = light.id.toString()
         String currentDesired = desiredStates[lid] ?: "off"
         
-        // 1. Check errors
+        // 1. Auth error takes highest priority (purple)
+        if (authErrs["${i}"] == true) {
+            desiredStates[lid] = "purple"
+            continue
+        }
+        
+        // 2. Water/other errors
         Map errs = state."vac${i}Errors" ?: [:]
         String errorColor = null
+        boolean hasBlue = false
+        boolean hasRed = false
         errs.each { k, v ->
             if (v) {
                 String lower = v.toLowerCase()
@@ -817,26 +918,27 @@ void updateVisualLights() {
                     lower.contains("clean water tank empty") || lower.contains("dirty water tank full") || 
                     lower.contains("water shortage") || lower.contains("water tank empty") || 
                     (lower.contains("water") && (lower.contains("empty") || lower.contains("full")))) {
-                    errorColor = "blue"
-                } else if (!errorColor) {
-                    errorColor = "red"
+                    hasBlue = true
+                } else {
+                    hasRed = true
                 }
             }
         }
+        if (hasBlue) errorColor = "blue"
+        else if (hasRed) errorColor = "red"
         
         if (errorColor) {
             if (errorColor == "blue" || currentDesired != "blue") {
                 desiredStates[lid] = errorColor
             }
         } else {
-            // 2. Check waiting/running states
+            // 3. Waiting/running states
             boolean waiting = false
             boolean running = false
             
             state.activeSequences.each { seqKey, seqState ->
                 if (seqState) {
                     if (seqState.waitingForStart) {
-                        // Check if this vac is part of the sequence
                         List seqRooms = normalizeToList(settings["seqRooms_${seqKey}"])
                         if (seqRooms.any { rc -> state.globalRoomMatrix[rc.toString()]?.vacuumIndex == i }) {
                             waiting = true
@@ -880,23 +982,76 @@ void updateVisualLights() {
             int level = (settings["vac${i}LightLevel"] ?: 100) as int
             if (level <= 0 || level > 100) level = 100
             
-            int hueG = (settings["vac${i}LightHueGreen"] != null) ? settings["vac${i}LightHueGreen"].toString().toInteger() : 33
-            int hueY = (settings["vac${i}LightHueYellow"] != null) ? settings["vac${i}LightHueYellow"].toString().toInteger() : 16
-            int hueR = (settings["vac${i}LightHueRed"] != null) ? settings["vac${i}LightHueRed"].toString().toInteger() : 0
-            int hueB = (settings["vac${i}LightHueBlue"] != null) ? settings["vac${i}LightHueBlue"].toString().toInteger() : 66
+            int hueG = getHueSafe("vac${i}LightHueGreen", 33)
+            int hueY = getHueSafe("vac${i}LightHueYellow", 16)
+            int hueR = getHueSafe("vac${i}LightHueRed", 0)
+            int hueB = getHueSafe("vac${i}LightHueBlue", 66)
+            int hueP = getHueSafe("vac${i}LightHuePurple", 75)
             
-            if (stateStr == "green") {
-                light.setColor([hue: hueG, saturation: 100, level: level])
-            } else if (stateStr == "red") {
-                light.setColor([hue: hueR, saturation: 100, level: level])
-            } else if (stateStr == "blue") {
-                light.setColor([hue: hueB, saturation: 100, level: level])
-            } else if (stateStr == "yellow") {
-                light.setColor([hue: hueY, saturation: 100, level: level])
-            } else if (stateStr == "off") {
-                light.off()
+            try {
+                if (stateStr == "green") {
+                    light.setColor([hue: hueG, saturation: 100, level: level])
+                } else if (stateStr == "red") {
+                    light.setColor([hue: hueR, saturation: 100, level: level])
+                } else if (stateStr == "blue") {
+                    light.setColor([hue: hueB, saturation: 100, level: level])
+                } else if (stateStr == "yellow") {
+                    light.setColor([hue: hueY, saturation: 100, level: level])
+                } else if (stateStr == "purple") {
+                    light.setColor([hue: hueP, saturation: 100, level: level])
+                } else if (stateStr == "off") {
+                    light.setLevel(0)
+                    light.off()
+                }
+            } catch (Exception e) {
+                log.error "Light update failed on ${light.displayName}: ${e.message}"
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Health Status Handler (auth recovery)
+// ---------------------------------------------------------------------------
+
+void healthStatusHandler(evt) {
+    String newStatus = evt.value?.toString()?.trim()?.toLowerCase() ?: ""
+    String oldStatus = evt.oldValue?.toString()?.trim()?.toLowerCase() ?: ""
+
+    def eventDevice = evt.getDevice()
+    String vacId = eventDevice?.getId()?.toString() ?: evt.deviceId?.toString()
+
+    int vacIdx = -1
+    int numVacs = (settings["numVacs"] ?: 0) as int
+    for (int i = 1; i <= numVacs; i++) {
+        if (settings?."vac${i}"?.getId()?.toString() == vacId) {
+            vacIdx = i
+            break
+        }
+    }
+
+    logDebug "HEALTH-EVT: ${eventDevice?.displayName} healthStatus '${oldStatus}' -> '${newStatus}' (vac idx ${vacIdx})"
+
+    if (vacIdx == -1) return
+
+    Map authErrs = (state.authErrored ?: [:]) as Map
+    boolean wasAuthErrored = (authErrs["${vacIdx}"] == true)
+
+    if (newStatus == "online") {
+        if (wasAuthErrored) {
+            log.warn "HEALTH-EVT: Vac${vacIdx} ${eventDevice?.displayName} back ONLINE (was auth-errored). Re-initializing rooms and schedule list."
+            authErrs.remove("${vacIdx}")
+            state.authErrored = authErrs
+
+            refreshVacuumErrors()
+            updateVisualLights()
+            buildGlobalMatrixEngine((settings["numVacs"] ?: 0) as int)
+            compileAndPublishSequenceList()
+        } else {
+            logDebug "HEALTH-EVT: Vac${vacIdx} is online (no auth-error flag set)."
+        }
+    } else {
+        logDebug "HEALTH-EVT: Vac${vacIdx} healthStatus not online: '${newStatus}' (not touching auth flag)"
     }
 }
 
@@ -1147,26 +1302,51 @@ void executeSequenceEngine(Map data) {
 void vacuumStateHandler(evt) {
     String newState = evt.value?.toString()?.trim()?.toLowerCase()
     logDebug "VAC-STATE: ${evt.device?.displayName} -> '${newState}'"
+
+    // Find which vac this belongs to (up front; used for auth detection and error refresh)
+    def eventDevice = evt.getDevice()
+    String vacId = eventDevice?.getId()?.toString() ?: evt.deviceId?.toString()
+    int vacIdx = -1
+    int numVacs = (settings["numVacs"] ?: 0) as int
+    for (int i = 1; i <= numVacs; i++) {
+        if (settings?."vac${i}"?.getId()?.toString() == vacId) {
+            vacIdx = i
+            break
+        }
+    }
+
+    // Detect authorization error (highest priority - do not process further)
+    if (isAuthErrorValue(newState) && vacIdx != -1) {
+        Map authErrs = (state.authErrored ?: [:]) as Map
+        if (authErrs["${vacIdx}"] != true) {
+            log.warn "AUTH-EVT: Vac${vacIdx} (${eventDevice?.displayName}) reports authorization error"
+            authErrs["${vacIdx}"] = true
+            state.authErrored = authErrs
+            updateVisualLights()
+        }
+        return  // Do not treat this as any sequence-completion state
+    }
     
     // Detect "emptying" state to reset SqFt counter (manual or auto empties)
     if (newState?.contains("emptying") || newState == "empty_bin") {
-        String vacId = evt.deviceId?.toString() ?: evt.getDevice()?.getId()?.toString()
-        int numVacs = (settings["numVacs"] ?: 0) as int
-        for (int i = 1; i <= numVacs; i++) {
-            def vd = settings?."vac${i}"
-            if (vd?.getId()?.toString() == vacId) {
-                boolean autoEmpty = settings["vac${i}AutoEmpty"] ?: false
-                if (autoEmpty) {
-                    BigDecimal prev = (state."vac${i}TotalSqFt" ?: 0) as BigDecimal
-                    state."vac${i}TotalSqFt" = 0
-                    logDebug "VAC-STATE: ${vd.displayName} is emptying bin. Reset SqFt counter (was ${prev})."
-                    updateDashboardHtml("${vd.displayName} emptied bin. SqFt counter reset.")
-                    updateBinPercentages()
-                }
-                break
+        if (vacIdx != -1) {
+            def vd = settings?."vac${vacIdx}"
+            boolean autoEmpty = settings["vac${vacIdx}AutoEmpty"] ?: false
+            if (autoEmpty) {
+                BigDecimal prev = (state."vac${vacIdx}TotalSqFt" ?: 0) as BigDecimal
+                state."vac${vacIdx}TotalSqFt" = 0
+                logDebug "VAC-STATE: ${vd.displayName} is emptying bin. Reset SqFt counter (was ${prev})."
+                updateDashboardHtml("${vd.displayName} emptied bin. SqFt counter reset.")
+                updateBinPercentages()
             }
         }
         return  // Not a sequence completion state
+    }
+    
+    // Refresh errors when a vac reaches a docked/charging state (errors often change together)
+    if (newState in ["charging", "docked", "charging_complete"]) {
+        refreshVacuumErrors()
+        updateVisualLights()
     }
     
     if (!state.activeSequences) {
@@ -1179,7 +1359,6 @@ void vacuumStateHandler(evt) {
         return
     }
 
-    String vacId = evt.deviceId?.toString() ?: evt.getDevice()?.getId()?.toString()
     if (!vacId) {
         logDebug "VAC-STATE: Could not determine vacId from event."
         return
@@ -1232,26 +1411,26 @@ void vacuumStateHandler(evt) {
         }
         
         logDebug "VAC-STATE: ${evt.device?.displayName} finished cleaning ${roomData.roomName}."
-        int vacIdx = roomData.vacuumIndex
+        int vIdx = roomData.vacuumIndex
         
-        boolean autoEmpty = settings["vac${vacIdx}AutoEmpty"] ?: false
+        boolean autoEmpty = settings["vac${vIdx}AutoEmpty"] ?: false
         if (autoEmpty) {
             def areaStr = expectedVac.currentValue("cleanArea")
             if (areaStr != null) {
                 BigDecimal area = 0
                 try { area = areaStr.toString() as BigDecimal } catch (Exception e) {}
                 
-                BigDecimal currentTotal = (state."vac${vacIdx}TotalSqFt" ?: 0) as BigDecimal
+                BigDecimal currentTotal = (state."vac${vIdx}TotalSqFt" ?: 0) as BigDecimal
                 currentTotal += area
                 
-                BigDecimal limit = (settings["vac${vacIdx}BinSqrFeet"] ?: 50) as BigDecimal
+                BigDecimal limit = (settings["vac${vIdx}BinSqrFeet"] ?: 50) as BigDecimal
                 
                 if (currentTotal >= limit) {
                     logDebug "VAC-STATE: Auto-empty threshold reached (${currentTotal} >= ${limit}). Triggering dust collection."
                     try { expectedVac.execute("app_start_collect_dust") } catch (Exception e) {}
                     currentTotal = 0
                 }
-                state."vac${vacIdx}TotalSqFt" = currentTotal
+                state."vac${vIdx}TotalSqFt" = currentTotal
                 logDebug "VAC-STATE: Area total is now ${currentTotal} / ${limit}"
                 updateBinPercentages()
             }
@@ -1305,8 +1484,11 @@ void vacuumErrorHandler(evt) {
     String newVal = evt.value?.toString()?.trim() ?: ""
     String oldVal = evt.oldValue?.toString()?.trim() ?: ""
 
-    // Find which vacuum this belongs to
-    String vacId = evt.deviceId?.toString() ?: evt.getDevice()?.getId()?.toString()
+    // Use evt.device primarily - evt.deviceId is not always populated
+    def eventDevice = evt.getDevice()
+    String vacId = eventDevice?.getId()?.toString()
+    if (!vacId) vacId = evt.deviceId?.toString()
+
     int vacIdx = -1
     int numVacs = (settings["numVacs"] ?: 0) as int
     for (int i = 1; i <= numVacs; i++) {
@@ -1320,17 +1502,21 @@ void vacuumErrorHandler(evt) {
         if (state."vac${vacIdx}Errors" == null) state."vac${vacIdx}Errors" = [:]
         if (isClearErrorValue(newVal)) {
             state."vac${vacIdx}Errors".remove(attr)
+            logDebug "ERROR-EVT: Removed '${attr}' from vac${vacIdx} error state (now clear)"
         } else {
             state."vac${vacIdx}Errors"[attr] = newVal
+            logDebug "ERROR-EVT: Set '${attr}' for vac${vacIdx} = '${newVal}'"
         }
         updateVisualLights()
+    } else {
+        logDebug "ERROR-EVT: Could not match device ${eventDevice?.displayName} to a configured vac"
     }
 
-    logDebug "ERROR-EVT: ${evt.device?.displayName} ${attr} changed from '${oldVal}' to '${newVal}'"
+    logDebug "ERROR-EVT: ${eventDevice?.displayName} ${attr} changed from '${oldVal}' to '${newVal}'"
 
     boolean newClear = isClearErrorValue(newVal)
     boolean oldClear = isClearErrorValue(oldVal)
-    String deviceName = evt.device?.displayName ?: "Vacuum"
+    String deviceName = eventDevice?.displayName ?: "Vacuum"
 
     def spk = settings.errorAlertSpeaker
     if (!spk) return
@@ -1344,7 +1530,7 @@ void vacuumErrorHandler(evt) {
         return
     }
 
-    String dedupKey = "${evt.device?.id ?: '?'}:${attr}:${newVal}"
+    String dedupKey = "${vacId ?: '?'}:${attr}:${newVal}"
     Map lastAnnounce = (state.lastErrorAnnounce ?: [:]) as Map
     long nowMs = now()
     long lastMs = (lastAnnounce[dedupKey] ?: 0) as long
