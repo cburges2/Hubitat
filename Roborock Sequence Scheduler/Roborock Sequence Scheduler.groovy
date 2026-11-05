@@ -60,6 +60,7 @@ Version History:
  *  v. 2.33 - 11/02/26 - Added light dim level setting; Added yellow color for delay waiting states
  *  v. 2.34 - 11/02/26 - Added custom hue inputs for each color signal state
  *  v. 2.35 - 11/03/26 - Split block timeouts: 30min default for room blocks, 12hr default for seq blocks
+ *  v. 2.36 - 11/05/26 - Check vacuum error attributes at sequence completion to ensure error lights
  *
  **/
 
@@ -67,7 +68,7 @@ import java.text.SimpleDateFormat
 import groovy.json.JsonSlurper
 
 definition (
-    name: "Roborock Sequence Scheduler AI",
+    name: "Roborock Sequence Scheduler",
     namespace: "Hubitat",
     author: "Chris Burgess",
     description: "Multi-Vac Room Scheduler",
@@ -732,6 +733,7 @@ def initialize() {
     buildAutomatedCronSchedules()
     compileAndPublishSequenceList()
     updateBinPercentages()
+    refreshVacuumErrors()
     updateVisualLights()
 
     logDebug "initialize() complete. Rooms in matrix: ${state.globalRoomMatrix?.size() ?: 0}"
@@ -767,6 +769,31 @@ void manageChildDevice() {
 // Visual State Light Engine
 // ---------------------------------------------------------------------------
 
+void refreshVacuumErrors() {
+    int numVacs = (settings["numVacs"] ?: 0) as int
+    for (int i = 1; i <= numVacs; i++) {
+        def vac = settings?."vac${i}"
+        if (!vac) continue
+        
+        if (state."vac${i}Errors" == null) state."vac${i}Errors" = [:]
+        
+        def errVal = vac.currentValue("error")?.toString()?.trim() ?: ""
+        def dockErrVal = vac.currentValue("dockError")?.toString()?.trim() ?: ""
+        
+        if (!isClearErrorValue(errVal)) {
+            state."vac${i}Errors"["error"] = errVal
+        } else {
+            state."vac${i}Errors".remove("error")
+        }
+        
+        if (!isClearErrorValue(dockErrVal)) {
+            state."vac${i}Errors"["dockError"] = dockErrVal
+        } else {
+            state."vac${i}Errors".remove("dockError")
+        }
+    }
+}
+
 void updateVisualLights() {
     if (!state.activeSequences) state.activeSequences = [:]
     Map desiredStates = [:] // lightId -> state ("green", "red", "blue", "yellow", "off")
@@ -786,7 +813,10 @@ void updateVisualLights() {
         errs.each { k, v ->
             if (v) {
                 String lower = v.toLowerCase()
-                if (lower.contains("waste water tank full") || lower.contains("water empty")) {
+                if (lower.contains("waste water tank full") || lower.contains("water empty") || 
+                    lower.contains("clean water tank empty") || lower.contains("dirty water tank full") || 
+                    lower.contains("water shortage") || lower.contains("water tank empty") || 
+                    (lower.contains("water") && (lower.contains("empty") || lower.contains("full")))) {
                     errorColor = "blue"
                 } else if (!errorColor) {
                     errorColor = "red"
@@ -1622,6 +1652,7 @@ void terminateSequence(Integer seqIdx, Boolean regularCompletion = true) {
     if (state.activeSequences?.containsKey(seqKey)) {
         state.activeSequences.remove(seqKey)
     }
+    refreshVacuumErrors()
     updateVisualLights()
     
     if (regularCompletion) { updateDashboardHtml("${getSeqName(seqIdx)} completed.") }
