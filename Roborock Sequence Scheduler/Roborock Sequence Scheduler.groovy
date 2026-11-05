@@ -68,31 +68,14 @@ Version History:
  *  v. 2.40 - 11/05/26 - Detect authorization errors; preserve room config; purple light; recover on healthStatus=online 
  **/
 
-/**
- *  **************** Roborock Sequence Scheduler  ****************
- *
- *  v. 2.30 - 11/01/26 - Added per-vac color light for running state and error alerts
- *  v. 2.31 - 11/01/26 - Fixed Map<String,def> generic syntax error in updateVisualLights()
- *  v. 2.32 - 11/01/26 - Added vac block separators/headers in UI; clarified light is optional
- *  v. 2.33 - 11/02/26 - Added light dim level setting; Added yellow color for delay waiting states
- *  v. 2.34 - 11/02/26 - Added custom hue inputs for each color signal state
- *  v. 2.35 - 11/03/26 - Split block timeouts: 30min default for room blocks, 12hr default for seq blocks
- *  v. 2.36 - 11/05/26 - Check vacuum error attributes at sequence completion to ensure error lights show
- *  v. 2.37 - 11/05/26 - Robust error subscriptions, periodic safety refresh, refresh on state change
- *  v. 2.38 - 11/05/26 - Fixed silent hue parse failures; reliable vac ID matching; belt-and-suspenders off
- *  v. 2.39 - 11/05/26 - Removed 1-minute polling workaround; relying on fixed subscriptions
- *  v. 2.40 - 11/05/26 - Detect authorization errors; preserve room config; purple light; recover on healthStatus=online
- *
- **/
-
 import java.text.SimpleDateFormat
 import groovy.json.JsonSlurper
 
 definition (
-    name: "Roborock Sequence Scheduler AI",
+    name: "Roborock Sequence Scheduler",
     namespace: "Hubitat",
     author: "Chris Burgess",
-    description: "Multi-Vac Room Scheduler",
+    description: "Multi-Vac Room Scheduler For Roborock Vacuums using the Roborock Vacuum Community integration by @Bloodtick_Jones",
     category: "My Apps",
     iconUrl: "",
     iconX2Url: ""
