@@ -61,11 +61,12 @@ Version History:
  *  v. 2.34 - 11/02/26 - Added custom hue inputs for each color signal state
  *  v. 2.35 - 11/03/26 - Split block timeouts: 30min default for room blocks, 12hr default for seq blocks
  *  v. 2.36 - 11/05/26 - Check vacuum error attributes at sequence completion to ensure error lights
- *  v. 2.38 - 11/05/26 - Fixed silent hue parse failures; reliable vac ID matching; explicit logging;
  *  v. 2.37 - 11/05/26 - Robust error subscriptions, periodic safety refresh, refresh on state change
  *  v. 2.38 - 11/05/26 - Fixed silent hue parse failures; reliable vac ID matching; belt-and-suspenders off
  *  v. 2.39 - 11/05/26 - Removed 1-minute polling workaround; relying on fixed subscriptions
  *  v. 2.40 - 11/05/26 - Detect authorization errors; preserve room config; purple light; recover on healthStatus=online 
+ *  v. 2.41 - 11/08/26 - Room history tracking (started/completed/canceled) sent to display tile
+ *  v. 2.42 - 11/11/26 - Fix light staying blue after clear: reliable off() + delayed error reconciliation
  **/
 
 import java.text.SimpleDateFormat
@@ -75,7 +76,7 @@ definition (
     name: "Roborock Sequence Scheduler",
     namespace: "Hubitat",
     author: "Chris Burgess",
-    description: "Multi-Vac Room Scheduler For Roborock Vacuums using the Roborock Vacuum Community integration by @Bloodtick_Jones",
+    description: "Multi-Vac Room Scheduler",
     category: "My Apps",
     iconUrl: "",
     iconX2Url: ""
@@ -267,7 +268,6 @@ void buildGlobalMatrixEngine(int numVacs) {
         boolean authError = (authErrs["${i}"] == true)
 
         if (authError) {
-            // Preserve existing rooms for auth-errored vac
             int preserved = 0
             state.globalRoomMatrix?.each { key, data ->
                 if (data?.vacuumIndex == i) {
@@ -371,14 +371,12 @@ void buildSequenceConfigSection() {
                 headerText += " - ${customName}"
             }
 
-            // Sequence Header Block
             paragraph "<hr style='border: 1px solid #ccc; margin-top: 25px;'/>"
             paragraph "<div style='background-color:#e8f0fe; color:#1a73e8; padding:8px; border-radius:4px; font-size:16px;'><b>${headerText}</b></div>"
 
             input(name: "seqEnabled_${s}", type: "bool", title: "Enable Sequence ${s}", defaultValue: true, width: 12, submitOnChange: true)
 
             if (settings["seqEnabled_${s}"] != false) {
-                // Sequence Basics (4+4+4 = 12)
                 input (name: "seqName_${s}", type: "string", title: "Name", defaultValue: "Sequence ${s}", width: 4)
                 input (name: "seqTime_${s}", type: "time", title: "Time", width: 4)
                 input (name: "seqUsePeriodic_${s}", type: "bool", title: "Use Periodic Days", defaultValue: false, width: 4, submitOnChange: true)
@@ -389,7 +387,6 @@ void buildSequenceConfigSection() {
                     input (name: "seqDays_${s}", type: "enum", title: "Days of Week", options: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], multiple: true, width: 12)
                 }
                 
-                // Room Selection (12)
                 input (name: "seqRooms_${s}", type: "enum", title: "Select Rooms for Sequence", options: roomOptions, multiple: true, submitOnChange: true, width: 12)
 
                 List selectedRooms = normalizeToList(settings["seqRooms_${s}"])
@@ -402,10 +399,8 @@ void buildSequenceConfigSection() {
                 selectedRooms.eachWithIndex { roomCode, idx ->
                     Map roomMeta = state.globalRoomMatrix[roomCode.toString()]
                     if (roomMeta) {
-                        // Room Header Block
                         paragraph "<div style='border-top: 1px dotted #aaa; margin-top: 15px; padding-top: 10px;'><b style='font-size:16px; color:#333;'>Room: ${roomMeta.roomName} (${roomMeta.vacLabel})</b></div>"
 
-                        // Order (2) + Mop (3) + Speaker (7) = 12
                         input(name: "seq_${s}_order_${roomCode}", type: "enum", title: "Clean Order", options: orderOptions, defaultValue: "${idx + 1}", width: 2)
                         input (name: "seq_${s}_mop_${roomCode}", type: "enum", title: "Mop Level", options: ["DEFAULT", "AUTO", "CUSTOM", "OFF", "LOW", "MEDIUM", "HIGH"], defaultValue: "DEFAULT", width: 3)
                         input (name: "seq_${s}_speechDevice_${roomCode}", type: "capability.speechSynthesis", title: "Speaker (empty = silent)", width: 7)
@@ -414,11 +409,9 @@ void buildSequenceConfigSection() {
                     }
                 }
                 
-                // Sequence Footer Block
                 paragraph "<div style='margin-top: 15px;'></div>"
                 input (name: "seqDelayAfter_${s}", type: "number", title: "Delay Buffer (mins) after sequence finishes", defaultValue: 2, required: true, width: 12)
 
-                // Sequence Start Delay
                 paragraph "<div style='border-top: 1px dotted #aaa; margin-top: 15px; padding-top: 10px;'><b style='font-size:16px; color:#333;'>Block Sequence Start</b></div>"
                 input(name: "seq_${s}_seqDelayEnable", type: "bool", title: "Delay entire sequence from starting?", defaultValue: false, width: 12, submitOnChange: true)
 
@@ -491,7 +484,6 @@ void buildRoomDelayInputs(int s, String roomCode, Map roomMeta) {
 
         paragraph "<hr style='border-top: 1px dashed #ddd; margin: 10px 0;'/>"
         
-        // Row 1: Device (9) + Remove (3) = 12
         if (i > 1) {
             input (name: devName, type: "capability.*", title: "Blocking Device ${i}", width: 9, submitOnChange: true)
             input(name: "removeRoomDelay_${s}_${roomCode}_${i}", type: "button", title: "Remove", width: 3, submitOnChange: true)
@@ -518,7 +510,6 @@ void buildRoomDelayInputs(int s, String roomCode, Map roomMeta) {
                 paragraph "<span style='color:#b00;'>⚠ Previously selected attribute '${savedAttr}' is not on ${delayDev.displayName}. Please re-select.</span>"
             }
 
-            // Row 2: Attribute (4) + Eq (3) + Value (5) = 12
             input (name: attrName, type: "enum", title: "Attribute to Monitor", options: attrs, width: 4, submitOnChange: true)
             input (name: eqName, type: "enum", title: "Delay cleaning if", options: ["=", "!="], defaultValue: "=", width: 3, submitOnChange: true)
 
@@ -591,7 +582,6 @@ def appButtonHandler(String buttonName) {
         String countKey = "seq_${s}_delayCount_${roomCode}"
         int count = (settings[countKey] ?: 1) as int
         
-        // Shift settings down
         for (int j = idx; j < count; j++) {
             String suffixA = (j == 1) ? "" : "_${j}"
             String suffixB = (j + 1 == 1) ? "" : "_${j + 1}"
@@ -604,7 +594,6 @@ def appButtonHandler(String buttonName) {
             app.updateSetting("seq_${s}_delayNumOp${suffixA}_${roomCode}", [type: "enum", value: settings["seq_${s}_delayNumOp${suffixB}_${roomCode}"]])
         }
         
-        // Remove last
         String lastSuffix = (count == 1) ? "" : "_${count}"
         app.removeSetting("seq_${s}_delayDevice${lastSuffix}_${roomCode}")
         app.removeSetting("seq_${s}_delayEq${lastSuffix}_${roomCode}")
@@ -754,7 +743,6 @@ def initialize() {
                     logDebug "Could not subscribe to 'healthStatus' on ${vacDevice.displayName}: ${e.message}"
                 }
 
-                // Re-check current state to seed auth-errored flag correctly
                 def currentState = vacDevice.currentValue("state")?.toString() ?: ""
                 if (isAuthErrorValue(currentState)) {
                     authErrs["${i}"] = true
@@ -836,8 +824,18 @@ void manageChildDevice() {
 }
 
 // ---------------------------------------------------------------------------
-// Visual State Light Engine
+// Visual State Light Engine & History
 // ---------------------------------------------------------------------------
+
+void addChildHistory(String roomName, String status) {
+    def childDevice = getChildDevice("rr_scheduler_child_" + app.id)
+    if (!childDevice) return
+    try {
+        childDevice.addHistoryEvent(roomName, status)
+    } catch (Exception e) {
+        log.warn "addChildHistory failed: ${e.message}"
+    }
+}
 
 void refreshVacuumErrors() {
     int numVacs = (settings["numVacs"] ?: 0) as int
@@ -849,24 +847,32 @@ void refreshVacuumErrors() {
         }
         def vac = settings?."vac${i}"
         if (!vac) continue
-        
+
         if (state."vac${i}Errors" == null) state."vac${i}Errors" = [:]
-        
+
         def errVal = vac.currentValue("error")?.toString()?.trim() ?: ""
         def dockErrVal = vac.currentValue("dockError")?.toString()?.trim() ?: ""
-        
+
+        logDebug "refreshVacuumErrors: vac${i} (${vac.displayName}) error='${errVal}' dockError='${dockErrVal}'"
+
         if (!isClearErrorValue(errVal)) {
             state."vac${i}Errors"["error"] = errVal
         } else {
             state."vac${i}Errors".remove("error")
         }
-        
+
         if (!isClearErrorValue(dockErrVal)) {
             state."vac${i}Errors"["dockError"] = dockErrVal
         } else {
             state."vac${i}Errors".remove("dockError")
         }
     }
+}
+
+void reconcileErrorState() {
+    logDebug "reconcileErrorState: re-reading driver error attributes to confirm clears"
+    refreshVacuumErrors()
+    updateVisualLights()
 }
 
 void updateVisualLights() {
@@ -983,8 +989,19 @@ void updateVisualLights() {
                 } else if (stateStr == "purple") {
                     light.setColor([hue: hueP, saturation: 100, level: level])
                 } else if (stateStr == "off") {
-                    light.setLevel(0)
-                    light.off()
+                    // Standard off() first. Some drivers reject setLevel(0) and would
+                    // abort the whole try block before off() ran, so never call it first.
+                    try {
+                        light.off()
+                    } catch (Exception e) {
+                        log.error "Light off() failed on ${light.displayName}: ${e.message}"
+                        try {
+                            light.setColor([hue: 0, saturation: 0, level: 0])
+                            light.setLevel(0)
+                        } catch (Exception e2) {
+                            log.error "Light fallback off failed on ${light.displayName}: ${e2.message}"
+                        }
+                    }
                 }
             } catch (Exception e) {
                 log.error "Light update failed on ${light.displayName}: ${e.message}"
@@ -1156,7 +1173,8 @@ void launchSequence(int seqIndex) {
         intermissionDelayActive: false,
         pausedForDelay: false,
         roomBlockedSince: null,
-        lastStartedStep: null
+        lastStartedStep: null,
+        startedRoomCode: null
     ]
 
     logDebug "LAUNCHSEQUENCE: START seq ${seqIndex}: ${sortedRooms.size()} room(s) -> ${sortedRooms}"
@@ -1220,14 +1238,12 @@ void executeSequenceEngine(Map data) {
 
     String blockingDevice = getRoomDelayBlockingDevice(seqIdx, currentRoomCode)
     if (blockingDevice != null) {
-        // Room block timeout: use maxRoomBlockWaitMinutes (default 30)
         int maxMin = (settings.maxRoomBlockWaitMinutes ?: 30) as int
         long maxMs = (maxMin as long) * 60000L
         long blockedSince = (seqState.roomBlockedSince ?: now()) as long
         
         if (now() - blockedSince > maxMs) {
             log.warn "Room ${roomLabel} TIMED OUT waiting for block to clear (${maxMin} min). Skipping to next room."
-            // Emit skip status first so it logs as a distinct child-device event
             updateDashboardHtml("${getSeqName(seqIdx)}: Skipped room '${roomLabel}' (blocked by ${blockingDevice} for ${maxMin}+ min)")
             seqState.roomBlockedSince = null
             seqState.pausedForDelay = false
@@ -1249,7 +1265,6 @@ void executeSequenceEngine(Map data) {
         return
     }
 
-    // It's clear!
     seqState.pausedForDelay = false
     seqState.roomBlockedSince = null
     seqState.lastStartedStep = targetStep
@@ -1276,6 +1291,9 @@ void executeSequenceEngine(Map data) {
     String mopConfig = settings["seq_${seqIdx}_mop_${currentRoomCode}"] ?: "DEFAULT"
     try {
         targetVacDevice.appRoomClean(roomData.nativeRoomId.toString(), mopConfig)
+        addChildHistory(roomData.roomName, "started")
+        seqState.startedRoomCode = currentRoomCode
+        state.activeSequences[seqKey] = seqState
     } catch (Exception e) {
         log.error "appRoomClean failed for room ${roomData.roomName}: ${e.message}"
         runIn(5, "executeSequenceEngine", [data: [seqIdx: seqIdx, targetStep: targetStep + 1]])
@@ -1286,7 +1304,6 @@ void vacuumStateHandler(evt) {
     String newState = evt.value?.toString()?.trim()?.toLowerCase()
     logDebug "VAC-STATE: ${evt.device?.displayName} -> '${newState}'"
 
-    // Find which vac this belongs to (up front; used for auth detection and error refresh)
     def eventDevice = evt.getDevice()
     String vacId = eventDevice?.getId()?.toString() ?: evt.deviceId?.toString()
     int vacIdx = -1
@@ -1298,7 +1315,6 @@ void vacuumStateHandler(evt) {
         }
     }
 
-    // Detect authorization error (highest priority - do not process further)
     if (isAuthErrorValue(newState) && vacIdx != -1) {
         Map authErrs = (state.authErrored ?: [:]) as Map
         if (authErrs["${vacIdx}"] != true) {
@@ -1307,10 +1323,9 @@ void vacuumStateHandler(evt) {
             state.authErrored = authErrs
             updateVisualLights()
         }
-        return  // Do not treat this as any sequence-completion state
+        return
     }
     
-    // Detect "emptying" state to reset SqFt counter (manual or auto empties)
     if (newState?.contains("emptying") || newState == "empty_bin") {
         if (vacIdx != -1) {
             def vd = settings?."vac${vacIdx}"
@@ -1323,10 +1338,9 @@ void vacuumStateHandler(evt) {
                 updateBinPercentages()
             }
         }
-        return  // Not a sequence completion state
+        return
     }
     
-    // Refresh errors when a vac reaches a docked/charging state (errors often change together)
     if (newState in ["charging", "docked", "charging_complete"]) {
         refreshVacuumErrors()
         updateVisualLights()
@@ -1419,6 +1433,11 @@ void vacuumStateHandler(evt) {
             }
         }
 
+        if (seqState.startedRoomCode) {
+            addChildHistory(roomData.roomName, "completed")
+            seqState.startedRoomCode = null
+        }
+
         int bufferMinutes = (settings["seqDelayAfter_${seqIdx}"] ?: 2) as int
         seqState.intermissionDelayActive = true
         state.activeSequences[seqKey] = seqState
@@ -1467,7 +1486,6 @@ void vacuumErrorHandler(evt) {
     String newVal = evt.value?.toString()?.trim() ?: ""
     String oldVal = evt.oldValue?.toString()?.trim() ?: ""
 
-    // Use evt.device primarily - evt.deviceId is not always populated
     def eventDevice = evt.getDevice()
     String vacId = eventDevice?.getId()?.toString()
     if (!vacId) vacId = evt.deviceId?.toString()
@@ -1483,16 +1501,21 @@ void vacuumErrorHandler(evt) {
 
     if (vacIdx != -1) {
         if (state."vac${vacIdx}Errors" == null) state."vac${vacIdx}Errors" = [:]
+        boolean wasSet = state."vac${vacIdx}Errors".containsKey(attr)
         if (isClearErrorValue(newVal)) {
             state."vac${vacIdx}Errors".remove(attr)
-            logDebug "ERROR-EVT: Removed '${attr}' from vac${vacIdx} error state (now clear)"
+            logDebug "ERROR-EVT: Removed '${attr}' from vac${vacIdx} error state (was ${wasSet ? 'set' : 'not set'}). Map now: ${state."vac${vacIdx}Errors"}"
         } else {
             state."vac${vacIdx}Errors"[attr] = newVal
             logDebug "ERROR-EVT: Set '${attr}' for vac${vacIdx} = '${newVal}'"
         }
         updateVisualLights()
+
+        // Schedule reconciliation in 20s to catch a race with refreshVacuumErrors()
+        // reading a stale currentValue during a state-change event
+        runIn(20, "reconcileErrorState")
     } else {
-        logDebug "ERROR-EVT: Could not match device ${eventDevice?.displayName} to a configured vac"
+        logDebug "ERROR-EVT: Could not match device ${eventDevice?.displayName} (id=${vacId}) to a configured vac"
     }
 
     logDebug "ERROR-EVT: ${eventDevice?.displayName} ${attr} changed from '${oldVal}' to '${newVal}'"
@@ -1527,7 +1550,7 @@ void vacuumErrorHandler(evt) {
 
     String command = (settings.echoCommand ?: "speak").trim().toLowerCase()
     logDebug "ERROR-EVT: Announcing to ${spk.displayName}: '${msg}'"
-    try { 
+    try {
         if (command == "speakmessage") spk.speakMessage(msg) else spk.speak(msg)
     } catch (Exception e) {
         log.error "Error announcement failed on ${spk.displayName}: ${e.message}"
@@ -1818,6 +1841,15 @@ void updateDashboardHtml(String statusMessage) {
 void terminateSequence(Integer seqIdx, Boolean regularCompletion = true) {
     logDebug "TERMINATE: seq=${seqIdx}, regular=${regularCompletion}"
     String seqKey = seqIdx.toString()
+    def seqState = state.activeSequences?.get(seqKey)
+
+    if (seqState?.startedRoomCode) {
+        String rCode = seqState.startedRoomCode.toString()
+        Map rData = state.globalRoomMatrix ? state.globalRoomMatrix[rCode] : null
+        String rName = rData?.roomName ?: rCode
+        addChildHistory(rName, "canceled")
+    }
+
     if (state.activeSequences?.containsKey(seqKey)) {
         state.activeSequences.remove(seqKey)
     }
@@ -1836,7 +1868,7 @@ void compileAndPublishSequenceList() {
     Map vacLists = [1:[], 2:[], 3:[], 4:[], 5:[]]
 
     for (int s = 1; s <= totalSeqs; s++) {
-        if (settings["seqEnabled_${s}"] == false) continue // Skip disabled sequences in the list
+        if (settings["seqEnabled_${s}"] == false) continue
 
         String seqName = getSeqName(s)
         List roomsList = normalizeToList(settings["seqRooms_${s}"])
@@ -1878,7 +1910,7 @@ void compileAndPublishSequenceList() {
             Map roomMeta = state.globalRoomMatrix ? state.globalRoomMatrix[roomCode.toString()] : null
             if (roomMeta) {
                 int vIdx = roomMeta.vacuumIndex
-                if (vIdx > 5) vIdx = 5 // Safeguard
+                if (vIdx > 5) vIdx = 5
                 if (!vacRooms[vIdx]) vacRooms[vIdx] = []
                 vacRooms[vIdx] << roomCode
             }

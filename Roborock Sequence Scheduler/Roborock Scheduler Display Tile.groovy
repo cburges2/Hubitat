@@ -1,5 +1,7 @@
 /**
  *  Roborock Scheduler Display Tile (Child Device Component)
+ *
+ *  v. 2.41 - 11/08/26 - Added historyList attribute + addHistoryEvent command + historySize preference
  */
 metadata {
     definition (name: "Roborock Scheduler Display Tile", namespace: "Hubitat", author: "Chris Burgess") {
@@ -14,7 +16,8 @@ metadata {
         attribute "sequenceListVac4", "string"
         attribute "sequenceListVac5", "string"
         attribute "dashboardSettings", "string"
-        
+        attribute "historyList", "string"
+
         attribute "binPercent1", "string"
         attribute "binPercent2", "string"
         attribute "binPercent3", "string"
@@ -28,14 +31,31 @@ metadata {
     }
 }
 
+preferences {
+    input (name: "historySize", type: "number",
+           title: "History events to display (5-20)",
+           defaultValue: 10, range: "5..20", required: true)
+}
+
 def installed() {
     log.info "Roborock Display Tile Component initialized."
     sendEvent(name: "numberOfButtons", value: 1000)
     setAppFrame()
+    if (!state.historyList) state.historyList = []
+    sendEvent(name: "historyList", value: renderHistoryHtml(state.historyList))
 }
 
 def updated() {
     setAppFrame()
+    // Re-trim history in case size preference shrank
+    if (state.historyList) {
+        int maxSize = getHistoryMaxSize()
+        List trimmed = state.historyList.take(maxSize)
+        state.historyList = trimmed
+        sendEvent(name: "historyList", value: renderHistoryHtml(trimmed))
+    } else {
+        sendEvent(name: "historyList", value: renderHistoryHtml([]))
+    }
 }
 
 def push(buttonNumber) {
@@ -62,7 +82,74 @@ def setNumberOfButtons(Integer num) {
     }
 }
 
-// Bring up the app settings page in an iFrame with dashboard button
+// ---------------------------------------------------------------------------
+// History Management
+// ---------------------------------------------------------------------------
+
+def addHistoryEvent(String roomName, String status) {
+    if (!roomName) return
+    if (!status) return
+    String s = status.toString().trim().toLowerCase()
+    if (!(s in ["started", "completed", "canceled"])) {
+        log.warn "addHistoryEvent: ignoring unsupported status '${status}'"
+        return
+    }
+
+    if (state.historyList == null) state.historyList = []
+
+    int maxSize = getHistoryMaxSize()
+    String timestamp = new Date().format("MMM d, h:mm a")
+    String entry = "${timestamp} - ${roomName} ${s}"
+
+    List newList = [entry] + (state.historyList as List)
+    if (newList.size() > maxSize) {
+        newList = newList.take(maxSize)
+    }
+    state.historyList = newList
+
+    sendEvent(name: "historyList", value: renderHistoryHtml(newList))
+}
+
+def clearHistory() {
+    state.historyList = []
+    sendEvent(name: "historyList", value: renderHistoryHtml([]))
+}
+
+int getHistoryMaxSize() {
+    int size = 10
+    try {
+        def v = device.latestSetting("historySize")
+        if (v != null) {
+            size = v.toString().toInteger()
+        }
+    } catch (Exception e) {
+        size = 10
+    }
+    if (size < 5) size = 5
+    if (size > 20) size = 20
+    return size
+}
+
+String renderHistoryHtml(List entries) {
+    if (!entries || entries.size() == 0) {
+        return "<div style='font-size:12px; font-family:sans-serif; color:#888; padding:4px;'>No history yet.</div>"
+    }
+    StringBuilder sb = new StringBuilder()
+    sb.append("<div style='font-size:12px; font-family:sans-serif; padding:2px; line-height:1.6;'>")
+    entries.eachWithIndex { e, idx ->
+        if (idx > 0) sb.append("<br>")
+        String entryText = (e?.toString() ?: '')
+        entryText = entryText.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+        sb.append(entryText)
+    }
+    sb.append("</div>")
+    return sb.toString()
+}
+
+// ---------------------------------------------------------------------------
+// App Settings Frame
+// ---------------------------------------------------------------------------
+
 def setAppFrame() {
     def hub = location.hubs[0]
     def hubIP = hub?.getDataValue("localIP")
@@ -73,12 +160,10 @@ def setAppFrame() {
     }
 }
 
-// create the button attribute for the dashboard to launch a url in an iFrame
 def getAppButton(url) {
     def mId = "m${device.id}"
     def fId = "f${device.id}"
     
-    // Minified CSS to stay under the 1024 character limit
     String s1 = "height:100%;width:100%;background:#e0e0e0;border:2px solid #999;border-radius:4px;color:#333;font-weight:bold;font-size:16px;cursor:pointer;"
     String s2 = "display:none;position:fixed;top:5%;left:5%;width:90%;height:90%;background:rgba(0,0,0,0.8);z-index:99;"
     String s3 = "position:absolute;top:5px;right:5px;font-size:16px;color:#fff;background:#000;border:1px solid #fff;cursor:pointer;padding:2px 6px;z-index:100;"
